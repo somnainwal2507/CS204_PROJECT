@@ -1,6 +1,6 @@
 .data
 myVar: .word 10, 20
-myStr: .asciz "Hello"
+myStr: .asciiz "Hello"
 
 .text
 main:
