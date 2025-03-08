@@ -3,215 +3,362 @@
 using namespace std;
 #define ll long long int
 
-// Starting addresses for segments
-int dataAddress = 0x10000000;
+int data = 0x10000000;
+int dataAddress = data;
 int pc = 0;
 
+
+
 int main() {
-    // Maps for variable addresses, data segment contents, and labels.
+
     map<string,int> varmap;
     map<int,int> dataSegment;
     map<string,int> label;
 
     ifstream inputFile("input.asm");
     ofstream dataOutputFile("output.mc");
+    //ofstream dataTokenFile("output_token.mc");
     string line;
-    bool inData = false, inText = false;
+    int flag=0,comment=0;
 
-    // === PASS 1: Process data segment directives ===
-    while (getline(inputFile, line)) {
-        if(line.empty()) continue;
-        stringstream ss(line);
-        vector<string> tokens;
-        string token;
-        // Tokenize the line (stop at comment)
-        while(ss >> token) {
-            if(token[0] == '#') break;
-            tokens.push_back(token);
-        }
-        if(tokens.empty()) continue;
-        if(tokens[0] == ".data") {
-            inData = true;
-            inText = false;
+    while (getline(inputFile, line))
+    {
+        if (line.empty()) 
+        {
             continue;
         }
-        else if(tokens[0] == ".text") {
-            inText = true;
-            inData = false;
-            break; // End of data segment pass.
-        }
-        if(inData) {
-            // Remove ':' from variable label if present.
-            if(tokens[0].back() == ':') {
-                tokens[0].pop_back();
-            }
-            // Process directives: .byte, .half, .word, .dword, .asciz
-            if(datatype_map.find(tokens[1]) != datatype_map.end()) {
-                varmap[tokens[0]] = dataAddress;
-                int typeSize = datatype_map[tokens[1]];
-                // Process all numbers following the directive.
-                for (size_t i = 2; i < tokens.size(); i++) {
-                    int n;
-                    if(tokens[i].substr(0,2) == "0x")
-                        n = stoi(tokens[i].substr(2), nullptr, 16);
-                    else
-                        n = stoi(tokens[i]);
-                    // Store each byte (little-endian)
-                    for(int j = 0; j < typeSize; j++) {
-                        dataSegment[dataAddress++] = n & 0xFF;
-                        n >>= 8;
+
+        stringstream ss(line);
+        vector<string> tokens;
+        string token,temp;
+        while (ss >> token) 
+        {
+            for(char c: token)
+            {
+                if(c == '#')
+                {
+                    if(!temp.empty() && !comment)
+                    {
+                        tokens.push_back(temp);
+                        //dataTokenFile<<temp<<endl;
                     }
+                    temp="";
+                    comment=1;
+                    break;
                 }
+                else if(c == ',')
+                {
+                    tokens.push_back(temp);
+                    //dataTokenFile<<temp<<endl;
+                    temp="";
+                }
+                else
+                {
+                    temp+=c;
+                }     
             }
-            else if(tokens[1] == ".asciz") {
-                // Expect exactly one string literal.
-                if(tokens.size() == 3) {
+            if(!temp.empty() && !comment)
+            {
+                tokens.push_back(temp);
+                //dataTokenFile<<temp<<endl;
+            }
+            temp="";
+            if(comment)
+            {
+                break;
+            }
+        }
+
+        comment = 0;
+
+        if(tokens.empty())
+        {
+            continue;
+        }
+        //dataTokenFile<<token<<endl;
+        if (tokens[0] == ".text") 
+        {
+            flag=0;
+            break;
+        } 
+        else if (tokens[0] == ".data") 
+        {
+            flag=1;
+            continue;
+        }
+        if(flag)
+        {
+            tokens[0].pop_back();
+            if (tokens[1][0] == '.') 
+            {    
+                if(datatype_map.find(tokens[1])!=datatype_map.end())
+                {
+                    varmap[tokens[0]] = dataAddress;
+                    int i=2;
+                    string s = tokens[i];
+                    while(i!=tokens.size())
+                    {
+                        int n;
+                        if(s[0]=='0'&&(s[1]=='x'||s[1]=='X'))
+                        {
+                            n = stoi(s.substr(2), nullptr, 16);
+                        }
+                        else
+                        {
+                            n = stoi(s);
+                        }
+                        int j=datatype_map[tokens[1]];
+                        while(j--)
+                        {
+                            dataSegment[dataAddress] = n&511;
+                            n=n>>8;
+                            dataAddress += 1;
+                        }
+                        i++;
+                        if(i!=tokens.size())
+                        {
+                            s=tokens[i];
+                        }
+                        
+                    }   
+                }
+                else if(tokens[1] == ".asciiz")
+                {
+                    if(tokens.size()!=3)
+                    {
+                        dataOutputFile<<"Error for "<<tokens[0]<<endl;
+                        break;
+                    }
                     varmap[tokens[0]] = dataAddress;
                     string s = tokens[2];
-                    // Remove surrounding quotes.
-                    s.erase(remove(s.begin(), s.end(), '\"'), s.end());
-                    for(char c : s) {
-                        dataSegment[dataAddress++] = c;
+                    for (char c : s) 
+                    {
+                        if(c=='"')
+                        {
+                            continue;
+                        }
+                        dataSegment[dataAddress] = c;
+                        dataAddress += 1;
                     }
-                    // Null termination.
-                    dataSegment[dataAddress++] = 0;
+                    dataSegment[dataAddress] = 0;
+                    dataAddress += 1;
                 }
+            }  
+        }
+    }
+
+
+
+    inputFile.clear();             
+    inputFile.seekg(0, ios::beg);
+    flag=0;
+    comment=0;
+
+
+    while(getline(inputFile, line))
+    {
+        if (line.empty()) 
+        {
+            continue;
+        }
+        else
+        {
+            stringstream ss(line);
+            vector<string> tokens;
+            string token;
+            while (ss >> token) 
+            {
+                //dataTokenFile<<token<<endl;
+                if(token[0] == '#')
+                {
+                    break;
+                }
+                if (token == ".text") 
+                {
+                    flag=0;
+                    break;
+                } 
+                else if (token == ".data") 
+                {
+                    flag=1;
+                    break;
+                }
+                int a = token.size();
+                if(token[a-1]==':' && !flag){
+                    token.pop_back();
+                    label[token]=pc;
+                    //cout<<"Stored"<<endl;
+                }
+                else if(!flag){
+                    pc+=4;
+                    if(token[0]=='l' && type_map.find(token)!=type_map.end()){
+                        ss>>token;
+                        ss>>token;
+                        if(varmap.find(token)!=varmap.end()){
+                            pc+=4;
+                        }
+                    }
+                }
+                break;
             }
         }
     }
 
-    // === PASS 2: Process labels in the text segment ===
-    inputFile.clear();
-    inputFile.seekg(0, ios::beg);
-    inText = false;
-    while(getline(inputFile, line)) {
-        if(line.empty()) continue;
-        stringstream ss(line);
-        vector<string> tokens;
-        string token;
-        ss >> token;
-        if(token == ".text") {
-            inText = true;
-            continue;
-        }
-        if(token == ".data") {
-            inText = false;
-            continue;
-        }
-        if(inText) {
-            // If a token ends with a colon, it's a label.
-            if(token.back() == ':') {
-                token.pop_back();
-                label[token] = pc;
-            }
-            else {
-                // Assume one instruction per line (ignoring extra tokens after the instruction)
-                pc += 4;
-            }
-        }
-    }
+    
 
-    // === PASS 3: Assemble text segment instructions ===
-    inputFile.clear();
+    inputFile.clear();             
     inputFile.seekg(0, ios::beg);
-    pc = 0;
-    inText = false;
-    while(getline(inputFile, line)) {
-        if(line.empty()) continue;
+
+    pc=0;
+    flag=0;
+    comment=0;
+
+    while (getline(inputFile, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
         stringstream ss(line);
         vector<string> tokens;
-        string token;
-        // Simple tokenization: split on spaces and commas (stop at comment)
-        while(ss >> token) {
-            if(token[0] == '#') break;
-            // Remove commas if present.
-            if(token.back() == ',') {
-                token.pop_back();
+        string token,temp;
+        while (ss >> token) {
+            for(char c: token){
+                if(c == '#'){
+                    if(!temp.empty() && !comment){
+                        tokens.push_back(temp);
+                        //dataTokenFile<<temp<<endl;
+                    }
+                    temp="";
+                    comment=1;
+                    break;
+                }
+                else if(c == ','){
+                    tokens.push_back(temp);
+                    //dataTokenFile<<temp<<endl;
+                    temp="";
+                }else{
+                    temp+=c;
+                }     
             }
-            tokens.push_back(token);
+            if(!temp.empty() && !comment){
+                tokens.push_back(temp);
+                //dataTokenFile<<temp<<endl;
+            }
+            temp="";
+            if(comment){
+                break;
+            }
         }
-        if(tokens.empty()) continue;
-        if(tokens[0] == ".text") {
-            inText = true;
+
+        comment = 0;
+
+        if(tokens.empty()){
             continue;
         }
-        else if(tokens[0] == ".data") {
-            inText = false;
+
+
+        if (tokens[0] == ".text") 
+        {
+            flag=0;
+            continue;
+        } 
+        else if (tokens[0] == ".data") 
+        {
+            flag=1;
             continue;
         }
-        if(inText) {
-            // Handle label definition lines
-            if(tokens[0].back() == ':') {
-                // Label definition; skip to next line.
-                continue;
-            }
-            // Process branch or jump labels by replacing them with relative offsets.
-            if(tokens.size() > 3 && (type_map[tokens[0]] == 'b' || type_map[tokens[0]] == 'j')) {
-                if(label.find(tokens.back()) != label.end()) {
-                    int offset = label[tokens.back()] - pc;
-                    tokens.back() = to_string(offset);
-                }
-            }
-            // Special handling for load pseudo-instructions referring to variables.
-            if(tokens[0][0] == 'l' && type_map.find(tokens[0]) != type_map.end()) {
-                // If the second token is a register and third is a variable.
-                if(varmap.find(tokens[2]) != varmap.end()) {
-                    int upper = dataAddress >> 12;
-                    vector<string> auipcInst = {"auipc", tokens[1], to_string(upper)};
-                    dataOutputFile << "0x" << hex << pc << " " << Uformat(auipcInst) << " , auipc " << tokens[1] << ", " << upper << " # opcode details" << endl;
-                    int base = upper << 12;
-                    int offset = varmap[tokens[2]] - base - pc;
-                    pc += 4;
-                    tokens[2] = to_string(offset) + "(" + tokens[1] + ")";
-                }
-            }
-            // Select and call the appropriate formatting function.
-            char type = type_map[tokens[0]];
-            string machineCode;
-            switch(type) {
+
+        if(!flag){
+            if(type_map.find(tokens[0])!=type_map.end())
+            {
+                char type = type_map[tokens[0]];
+                switch(type){
                 case 'r':
-                    machineCode = Rformat(tokens);
-                    break;
+                    {
+                        dataOutputFile<<"0x"<<std::hex<<pc<<" "<<Rformat(tokens)<<endl;
+                        pc+=4;
+                        break;
+                    }
                 case 'i':
-                    machineCode = Iformat(tokens);
-                    break;
+                    {
+                        if(varmap.find(tokens[2])!=varmap.end() && tokens[0][0]=='l'){
+                            int num = data>>12;
+                            vector<string> temp = {"auipc",tokens[1],to_string(num)};
+                            dataOutputFile<<"0x"<<std::hex<<pc<<" "<<Uformat(temp)<<endl;             
+                            num = num<<12;
+                            int n = (varmap[tokens[2]]-num-pc);
+                            pc+=4;
+                            tokens[2]=to_string(n)+"("+tokens[1]+")";
+                        }
+                        dataOutputFile<<"0x"<<std::hex<<pc<<" "<<Iformat(tokens)<<endl;
+                        pc+=4;
+                        break;
+                    }
                 case 's':
-                    machineCode = Sformat(tokens);
-                    break;
+                    {
+                        dataOutputFile<<"0x"<<std::hex<<pc<<" "<<Sformat(tokens)<<endl;
+                        pc+=4;
+                        break;
+                    }
                 case 'b':
-                    machineCode = SBformat(tokens);
-                    break;
+                    {
+                        if(label.find(tokens[3])!=label.end()){
+                            tokens[3]=to_string(label[tokens[3]]-pc);
+                        }
+                        dataOutputFile<<"0x"<<std::hex<<pc<<" "<<SBformat(tokens)<<endl;
+                        pc+=4;
+                        break;
+                    }
                 case 'u':
-                    machineCode = Uformat(tokens);
-                    break;
+                    {
+                        dataOutputFile<<"0x"<<std::hex<<pc<<" "<<Uformat(tokens)<<endl;
+                        pc+=4;
+                        break;
+                    }
                 case 'j':
-                    machineCode = UJformat(tokens);
-                    break;
+                    {
+                        if(label.find(tokens[2])!=label.end()){
+                            tokens[2]=to_string(label[tokens[2]]-pc);
+                        }
+                        dataOutputFile<<"0x"<<std::hex<<pc<<" "<<UJformat(tokens)<<endl;
+                        pc+=4;
+                        break;
+                    }    
                 default:
-                    machineCode = "Error";
+                {
+                    dataOutputFile<<"Error"<<endl;
+                }
+                }
+            }else {
+                tokens[0].pop_back();
+                if(label.find(tokens[0])==label.end()){
+                    dataOutputFile<<"Command not found"<<endl;
+                    break;
+                }
             }
-            dataOutputFile << "0x" << hex << pc << " " << machineCode << " , ";
-            // Reconstruct the assembly instruction for output.
-            for (size_t i = 0; i < tokens.size(); i++) {
-                dataOutputFile << tokens[i];
-                if(i < tokens.size()-1)
-                    dataOutputFile << ", ";
-            }
-            dataOutputFile << " # opcode details" << endl;
-            pc += 4;
         }
     }
 
-    // Write termination code for text segment.
-    dataOutputFile << "0x" << hex << pc << " " << "0x00000000" << " , termination" << endl;
+    dataOutputFile<<endl<<"Data Segment"<<endl;
 
-    // Write the data segment.
-    dataOutputFile << "\nData Segment" << endl;
-    for(auto it: dataSegment) {
-        dataOutputFile << "0x" << hex << it.first << " 0x" << hex << it.second << endl;
+    for(auto it: dataSegment)
+    {
+        dataOutputFile<<"0x"<<std::hex<<it.first<<" 0x"<<std::hex<<it.second<<endl;
     }
+
+    // for(auto it: label)
+    // {
+    //     dataOutputFile<<it.first<<" "<<it.second<<endl;
+    // }
+
+    // for(auto it: varmap)
+    // {
+    //     dataOutputFile<<it.first<<" "<<std::hex<<it.second<<endl;
+    // }
 
     inputFile.close();
     dataOutputFile.close();
+    //dataTokenFile.close();
+
     return 0;
 }

@@ -29,22 +29,9 @@ string Rformat (vector <string> &instruction)
     stringstream ss;
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
     
-    cout << ss.str()<< endl;
+    // cout << ss.str()<< endl;
     return ss.str(); 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 string Iformat (vector <string> &instruction)
@@ -130,7 +117,7 @@ string Iformat (vector <string> &instruction)
         ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
 
 
-        cout << ss.str()<< endl;
+        // cout << ss.str()<< endl;
         return ss.str();
     }
 }
@@ -206,24 +193,9 @@ string Sformat (vector <string> &instruction)
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
 
 
-    cout << ss.str()<< endl;
+    // cout << ss.str()<< endl;
     return ss.str();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -275,7 +247,7 @@ string SBformat (vector <string> &instruction)
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
 
 
-    cout << ss.str()<< endl;
+    // cout << ss.str()<< endl;
     return ss.str();
 }
 
@@ -335,7 +307,7 @@ string Uformat (vector <string> &instruction)
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
 
 
-    cout << ss.str()<< endl;
+    // cout << ss.str()<< endl;
     return ss.str();
 
 }
@@ -401,7 +373,7 @@ string UJformat (vector <string> &instruction)
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
 
 
-    cout << ss.str()<< endl;
+    // cout << ss.str()<< endl;
     return ss.str();
 
 }
