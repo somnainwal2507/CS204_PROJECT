@@ -4,6 +4,5 @@ myStr: .asciiz "Hello"
 
 .text
 main:
-lui x3, 0x10000
-ld x2 0(x3)
-
+lui x3 0x10000
+ld x2, 0, x3
