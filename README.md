@@ -1,6 +1,6 @@
 # RISC-V Assembler
 
-A simple assembler project developed for a Computer Architecture course. This tool translates RISC-V assembly language into machine code, demonstrating key principles in instruction translation and computer organization.
+A simple assembler project developed for the Computer Architecture course. This tool translates RISC-V assembly language into machine code, demonstrating key principles in instruction translation and computer organization.
 
 ---
 
@@ -12,6 +12,7 @@ A simple assembler project developed for a Computer Architecture course. This to
   - [Compilation](#compilation)
   - [Running the Assembler](#running-the-assembler)
 - [Limitations](#limitations)
+- [Further Scope of Improvement](#further-scope-of-improvement)
 - [About Us](#about-us)
 
 
@@ -32,6 +33,8 @@ This project takes an assembly file (`input.asm`) containing RISC-V code as inpu
 
 - **C++ Compiler:** Ensure you have a C++ compiler installed (e.g., `g++` or `clang++`).
 - **Command Line Usage:** Basic knowledge of terminal commands to compile and run the project.
+- **bits/std++ Library:** This project requires the `bits/std++` library to be available. It is typically included in most modern C++ standard library distributions.
+
 
 ### Compilation
 
@@ -52,6 +55,14 @@ This project takes an assembly file (`input.asm`) containing RISC-V code as inpu
 ---
 
 ## Limitations
+- `label :` is not supported as a label. It should be of the form `label:`
+-
+
+---
+
+## Further Scope of Improvement
+
+We can implement a proper lexer which can tokenize the input code in a much more systematic manner. This will help in handling edge cases and errors more efficiently.
 
 ---
 
