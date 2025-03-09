@@ -41,12 +41,13 @@ This project takes an assembly file (`input.asm`) containing RISC-V code as inpu
    ```bash
       g++ main.cpp -o assembler
     ```
-3. Run the compiled executable:
+### Running the Assembler
+1. Run the compiled executable:
 
    ```bash
       ./assembler
     ```
-4. The program will read the `input.asm` file and generate the corresponding machine code in `output.mc`.
+2. The program will read the `input.asm` file and generate the corresponding machine code in `output.mc`.
 
 ---
 
