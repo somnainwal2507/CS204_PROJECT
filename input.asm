@@ -4,7 +4,6 @@ myStr: .asciiz "Hello"
 
 .text
 main:
-    add x1, x2, x3
-    addi x4, x1, 5
-    beq x1, x2, main
-    jal x0, main
+lui x3, 0x10000
+ld x2 0(x3)
+

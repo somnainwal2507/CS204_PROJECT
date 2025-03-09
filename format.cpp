@@ -3,6 +3,25 @@
 using namespace std;
 #define ll long long int
 
+//Helper function for immediate values
+ll parseImmediate(const string &immStr) {
+    bool negative = false;
+    string token = immStr;
+    if(!token.empty() && token[0] == '-') {
+        negative = true;
+        token = token.substr(1);
+    }
+    if(token.size() >= 3 && token.front() == '\'' && token.back() == '\'') {
+        ll val = static_cast<ll>(token[1]);
+        return negative ? -val : val;
+    }
+    if(token.size() >= 2 && token[0] == '0' && (token[1]=='x' || token[1]=='X')) {
+        ll val = stoll(token.substr(2), nullptr, 16);
+        return negative ? -val : val;
+    }
+    ll val = stoll(token);
+    return negative ? -val : val;
+}
 
 
 
@@ -28,112 +47,64 @@ string Rformat (vector <string> &instruction)
     ll machineCode = (func7 << 25) | (rs2 << 20) | (rs1 << 15) | (func3 << 12) | (rd << 7) | opcode;
     stringstream ss;
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
-    
-    // cout << ss.str()<< endl;
     return ss.str(); 
 }
 
 
-string Iformat (vector <string> &instruction)
+
+string Iformat(vector<string> &instruction)
 {
-    // Validate instruction format
+    // Determine if we are dealing with a load instruction (which has a different token count)
     int flag = 0;
     if (instruction.size() != 4) {
-        vector <string> temp = {"lb", "ld", "lh", "lw"};
-        if (instruction.size() == 3 && find(temp.begin(),temp.end(),instruction[0])!=temp.end())
+        vector<string> temp = {"lb", "ld", "lh", "lw"};
+        if (instruction.size() == 3 && find(temp.begin(), temp.end(), instruction[0]) != temp.end())
             flag = 1;
         else
             return "Invalid instruction format";
     }
 
     string opcode_temp = codes_map[instruction[0]][0];
-    string func3_temp = codes_map[instruction[0]][1];
-
+    string func3_temp  = codes_map[instruction[0]][1];
 
     int opcode = stoi(opcode_temp, nullptr, 16);
-    int func3 = stoi(func3_temp, nullptr, 16);
-    int rd = stoi(instruction[1].substr(1));
+    int func3  = stoi(func3_temp, nullptr, 16);
+    int rd     = stoi(instruction[1].substr(1));
     int rs1;
-    ll imm;
-
+    ll rawImm; // the immediate value as provided
 
     if (!flag)
     {   
         rs1 = stoi(instruction[2].substr(1));
-        int flag2 = 0;
-        if (instruction[3][0] == '-'){
-            instruction[3] = instruction[3].substr(1);
-            flag2 = 1;
-        }
-
-        if (instruction[3][0] == '0' && (instruction[3][1] == 'x' || instruction[3][1] == 'X')){
-            imm = stoi(instruction[3].substr(2), nullptr, 16);
-        }
-        else{
-            imm = stoi(instruction[3]);
-        }
-        if (flag2) imm *= -1;
-        if (imm<0){
-            imm = (1 << 12) + imm;
-            imm = imm & 0xFFF;
-        }
+        // Use the helper to parse the immediate (works for numbers and char literals)
+        rawImm = parseImmediate(instruction[3]);
     }
     else
     {
+        // For load instructions 
         string str = instruction[2];
         size_t start_pos = str.find('(');
         size_t end_pos = str.find(')');
-
-
-        string imm_str = str.substr(0,start_pos);
-        int flag2 = 0;
-        if (imm_str[0] == '-'){
-            imm_str = imm_str.substr(1);
-            flag2 = 1;
-        }
-
-        if (imm_str[0] == '0' && (imm_str[1] == 'x' || imm_str[1] == 'X'))
-            imm = stoi(imm_str.substr(2), nullptr, 16);
-        else{
-            imm = stoi(imm_str);
-        }
-        
-        if (flag2) imm *= -1;
-        if (imm<0){
-            imm = (1 << 12) + imm;
-            imm = imm & 0xFFF;
-        }
-
-        rs1 = stoi((str.substr(start_pos+1,end_pos - start_pos -1)).substr(1));
+        string imm_str = str.substr(0, start_pos);
+        rawImm = parseImmediate(imm_str);
+        rs1 = stoi((str.substr(start_pos + 1, end_pos - start_pos - 1)).substr(1));
     }
 
-    if(imm>2047 || imm<-2048){
+    if (rawImm > 2047 || rawImm < -2048) {
         return "Immediate value out of bounds";
     }
 
-    else{
-        ll machineCode = (imm << 20) | (rs1 << 15) | (func3 << 12) | (rd << 7) | opcode;
-        stringstream ss;
-        ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
+    ll imm;
+    if (rawImm < 0)
+        imm = (1 << 12) + rawImm;  
+    else
+        imm = rawImm;
 
-
-        // cout << ss.str()<< endl;
-        return ss.str();
-    }
+    ll machineCode = (imm << 20) | (rs1 << 15) | (func3 << 12) | (rd << 7) | opcode;
+    stringstream ss;
+    ss << hex << "0x" << uppercase << setw(8) << setfill('0') << machineCode;
+    return ss.str();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -191,9 +162,6 @@ string Sformat (vector <string> &instruction)
     ll machineCode = (imm1 << 25) | (rs2 << 20) | (rs1 << 15) | (func3 << 12) | (imm2 << 7) | opcode;
     stringstream ss;
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
-
-
-    // cout << ss.str()<< endl;
     return ss.str();
 }
 
@@ -245,28 +213,8 @@ string SBformat (vector <string> &instruction)
     ll machineCode = (imm1 << 25) | (rs2 << 20) | (rs1 << 15) | (func3 << 12) | (imm2 << 7) | opcode;
     stringstream ss;
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
-
-
-    // cout << ss.str()<< endl;
     return ss.str();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -305,24 +253,9 @@ string Uformat (vector <string> &instruction)
     ll machineCode = (imm << 12) | (rd << 7) | opcode;
     stringstream ss;
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
-
-
-    // cout << ss.str()<< endl;
     return ss.str();
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -371,9 +304,6 @@ string UJformat (vector <string> &instruction)
     ll machineCode = (shuffled_imm << 12) | (rd << 7) | opcode;
     stringstream ss;
     ss << hex << "0x" << uppercase << std::setw(8) << std::setfill('0') << machineCode;
-
-
-    // cout << ss.str()<< endl;
     return ss.str();
 
 }

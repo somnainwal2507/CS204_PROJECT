@@ -57,6 +57,7 @@ map <string,int> datatype_map = {
     {".half", 2},
     {".word", 4},
     {".dword", 8},
+    {".double", 8}
 };
 
 
@@ -100,7 +101,6 @@ unordered_map <string, string> register_map = {
 };
 
 unordered_map <string,char> type_map = {
-
     {"add", 'r'},
     {"and", 'r'},
     {"or", 'r'},
