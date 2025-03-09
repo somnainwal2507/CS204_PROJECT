@@ -56,6 +56,6 @@ This project takes an assembly file (`input.asm`) containing RISC-V code as inpu
 ---
 
 ## About Us
-Atharva Mahajan (2023CSB1104)
-Nachiket Avachat (2023CSB1106)
-Som Nainwal (2023CSB1163)
+- Atharva Mahajan (2023CSB1104)
+- Nachiket Avachat (2023CSB1106)
+- Som Nainwal (2023CSB1163)
