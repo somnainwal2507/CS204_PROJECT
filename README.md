@@ -57,6 +57,7 @@ This project takes an assembly file (`input.asm`) containing RISC-V code as inpu
 ## Limitations
 - `label :` is not supported as a label. It should be of the form `label:`
 - There should be a space after `label: `.
+- `.data:` and `.text:` are not supported. They should come without the colon as `.data` and `.text`.
 
 ---
 
