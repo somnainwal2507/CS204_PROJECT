@@ -359,45 +359,53 @@ int main() {
     }
 
     // Pass 2: find labels in .text
-    inputFile.clear();
-    inputFile.seekg(0, ios::beg);
-    flag=0; comment=0;
-    while(getline(inputFile, line)) {
-        if (line.empty()) continue;
-        stringstream ss(line);
-        vector<string> tokens;
-        string token;
-        while (ss >> token) {
-            if(token[0] == '#') break;
-            if(token == ".text") {
-                flag=0;
-                break;
-            } else if(token == ".data") {
-                flag=1;
-                break;
+inputFile.clear();
+inputFile.seekg(0, ios::beg);
+flag = 0;
+comment = 0;
+while (getline(inputFile, line)) {
+    if (line.empty()) continue;
+    stringstream ss(line);
+    vector<string> tokens;
+    string token;
+    while (ss >> token) {
+        if (token[0] == '#') break;  // skip comments
+        tokens.push_back(token);
+    }
+    if (tokens.empty()) continue;
+    
+    // Handle section directives
+    if (tokens[0] == ".text") {
+        flag = 0;
+        continue;
+    } else if (tokens[0] == ".data") {
+        flag = 1;
+        continue;
+    }
+    
+    if (!flag) {  // Only process lines in the .text section
+        // Check if a label is defined
+        if (tokens[0].back() == ':') {
+            // Label defined as "label:"
+            string lab = tokens[0].substr(0, tokens[0].size() - 1);
+            label[lab] = pc;
+            continue;
+        } else if (tokens.size() > 1 && tokens[1] == ":") {
+            // Label defined as "label :"
+            label[tokens[0]] = pc;
+            continue;
+        }
+        // Otherwise, treat it as an instruction.
+        pc += 4;
+        // Check for a pseudo-instruction (e.g., la)
+        if (tokens[0][0] == 'l' && type_map.find(tokens[0]) != type_map.end()) {
+            // e.g. la x5 var1 => expecting at least 3 tokens
+            if (tokens.size() >= 3 && varmap.find(tokens[2]) != varmap.end()) {
+                pc += 4;
             }
-            int sz = token.size();
-            if(token[sz-1] == ':' && !flag) {
-                // label
-                token.pop_back();
-                label[token] = pc;
-            }
-            else if(!flag) {
-                // it's an instruction
-                pc+=4;
-                // pseudo-instruction like la?
-                if(token[0]=='l' && type_map.find(token)!=type_map.end()) {
-                    // e.g. la x5 var1
-                    ss >> token; // x5
-                    ss >> token; // var1
-                    if(varmap.find(token)!=varmap.end()) {
-                        pc+=4;
-                    }
-                }
-            }
-            break;
         }
     }
+}
 
     // Pass 3: Generate machine code
     inputFile.clear();
@@ -577,4 +585,3 @@ int main() {
     dataOutputFile.close();
     return 0;
 }
-
