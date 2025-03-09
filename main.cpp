@@ -458,7 +458,6 @@ int main() {
         }
 
         if(!flag) {
-            for(auto x: tokens) cout<<x<<" "; cout<<endl;
             ostringstream instrStr;
             instrStr << tokens[0];
             for(int i = 1; i < (int)tokens.size(); i++) {
@@ -483,19 +482,30 @@ int main() {
                         break;
                     }
                     case 'i': {
-                        if(tokens[0][0]=='l' && tokens.size()>=3 && varmap.find(tokens[2]) != varmap.end()) {
-                            int num = data >> 12;
-                            vector<string> tempInstr = {"auipc", tokens[1], to_string(num)};
-                            string mc2   = Uformat(tempInstr);
-                            string bits2 = UbitString(tempInstr);
-                            dataOutputFile << "0x" << std::hex << pc << " "
-                                           << mc2 << " , " 
-                                           << ("auipc " + tokens[1] + "," + to_string(num))
-                                           << " # " << bits2 << "\n";
-                            pc += 4;
-                            num <<= 12;
-                            int offset = (varmap[tokens[2]] - num - pc);
-                            tokens[2] = to_string(offset) + "(" + tokens[1] + ")";
+                        if(tokens[0][0]=='l'){
+                            if(tokens.size()>3){
+                                string mer="";
+                                mer+=tokens[2];
+                                mer+='(';
+                                mer+=tokens[3];
+                                mer+=')';
+                                tokens[2]=mer;
+                                while(tokens.size()>3) tokens.pop_back();
+                            }
+                            if(tokens.size()>=3 && varmap.find(tokens[2]) != varmap.end()) {
+                                int num = data >> 12;
+                                vector<string> tempInstr = {"auipc", tokens[1], to_string(num)};
+                                string mc2   = Uformat(tempInstr);
+                                string bits2 = UbitString(tempInstr);
+                                dataOutputFile << "0x" << std::hex << pc << " "
+                                               << mc2 << " , " 
+                                               << ("auipc " + tokens[1] + "," + to_string(num))
+                                               << " # " << bits2 << "\n";
+                                pc += 4;
+                                num <<= 12;
+                                int offset = (varmap[tokens[2]] - num - pc);
+                                tokens[2] = to_string(offset) + "(" + tokens[1] + ")";
+                            }
                         }
                         mc   = Iformat(tokens);
                         bits = IbitString(tokens);
@@ -506,6 +516,15 @@ int main() {
                         break;
                     }
                     case 's': {
+                        if(tokens.size()>3){
+                            string mer="";
+                            mer+=tokens[2];
+                            mer+='(';
+                            mer+=tokens[3];
+                            mer+=')';
+                            tokens[2]=mer;
+                            while(tokens.size()>3) tokens.pop_back();
+                        }
                         mc   = Sformat(tokens);
                         bits = SbitString(tokens);
                         dataOutputFile << "0x" << std::hex << pc << " "
