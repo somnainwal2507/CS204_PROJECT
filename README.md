@@ -9,8 +9,8 @@ A simple assembler project developed for a Computer Architecture course. This to
 - [Overview](#overview)
 - [Usage](#usage)
   - [Prerequisites](#prerequisites)
-    - [Compilation](#compilation)
-      - [Running the Assembler](#running-the-assembler)
+  - [Compilation](#compilation)
+  - [Running the Assembler](#running-the-assembler)
 - [Limitations](#limitations)
 - [About Us](#about-us)
 
