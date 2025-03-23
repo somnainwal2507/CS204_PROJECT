@@ -373,23 +373,67 @@ def parse_final_state(filename):
                         regs.append((reg, val))
     return regs
 
+import os
 
 def parse_final_data(filename):
     """
-    final_data.mc lines:
-      0x10010000 0xABCD1234
-    Return list of (mem_loc, value)
+    Expects final_data.mc lines of the form:
+        0x10000000 = 0xABC01234
+
+    Returns:
+        A dictionary { address_int : value_int }.
+        address_int and value_int are integers parsed from hex strings.
     """
-    mem = []
-    if os.path.exists(filename):
-        with open(filename, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    parts = line.split()
-                    if len(parts) == 2:
-                        mem.append((parts[0], parts[1]))
+    mem = {}
+
+    if not os.path.exists(filename):
+        return mem  # return empty dict if file doesn't exist
+
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue  # skip blank lines
+
+            # Split around '='
+            parts = line.split('=', 1)
+            if len(parts) != 2:
+                # If the line doesn't match the expected format, skip it
+                continue
+
+            addr_str = parts[0].strip()  # e.g. "0x10000000"
+            val_str  = parts[1].strip()  # e.g. "0xABC01234"
+
+            try:
+                # Convert hex strings to integers
+                addr_int = int(addr_str, 16)
+                val_int  = int(val_str, 16)
+            except ValueError:
+                # If parsing fails, skip this line or handle differently
+                continue
+
+            # Store in the dictionary
+            mem[addr_int] = val_int
+
     return mem
+
+
+# def parse_final_data(filename):
+#     """
+#     final_data.mc lines:
+#       0x10010000 = 0xABCD1234
+#     Return list of (mem_loc, value)
+#     """
+#     mem = []
+#     if os.path.exists(filename):
+#         with open(filename, 'r') as f:
+#             for line in f:
+#                 line = line.strip()
+#                 if line:
+#                     parts = line.split()
+#                     if len(parts) == 2:
+#                         mem.append((parts[0], parts[1]))
+#     return mem
 
 
 def parse_register_log(filename, step_idx):
