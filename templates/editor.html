@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block title %}RISC-V Editor{% endblock %}
+{% block content %}
+<h1>Editor</h1>
+<form method="POST" action="{{ url_for('editor') }}">
+  <div class="mb-3">
+    <label for="code" class="form-label">RISC-V Assembly Code</label>
+    <textarea id="code" name="code" rows="12" class="form-control">{{ code }}</textarea>
+  </div>
+  <button type="submit" class="btn btn-primary">Assemble from Editor</button>
+</form>
+{% endblock %}

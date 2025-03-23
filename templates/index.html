@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RISC-V Simulator</title>
+  <!-- Bootstrap (optional, but makes tabbing easier) -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+  <style>
+    /* Simple scrollable area for registers and memory */
+    #registersPane, #memoryPane {
+      max-height: 400px;
+      overflow-y: auto;
+      background-color: #222;
+      color: #ddd;
+      padding: 1em;
+      margin: 0.5em 0;
+    }
+    .hidden {
+      display: none;
+    }
+    body {
+      background-color: #111;
+      color: #fff;
+    }
+    .nav-link {
+      cursor: pointer;
+    }
+    textarea {
+      width: 100%;
+      height: 300px;
+    }
+    .btn {
+      margin-right: 0.5em;
+    }
+  </style>
+</head>
+<body>
+<div class="container mt-4">
+  <!-- Nav tabs -->
+  <ul class="nav nav-tabs" id="mainTab" role="tablist">
+    <li class="nav-item">
+      <a
+        class="nav-link {% if not active_tab or active_tab == 'editor' %}active{% endif %}"
+        id="editor-tab"
+        data-bs-toggle="tab"
+        href="#editor"
+        role="tab"
+        aria-controls="editor"
+        aria-selected="true"
+      >
+        Editor
+      </a>
+    </li>
+    <li class="nav-item">
+      <a
+        class="nav-link {% if active_tab == 'simulator' %}active{% endif %}"
+        id="simulator-tab"
+        data-bs-toggle="tab"
+        href="#simulator"
+        role="tab"
+        aria-controls="simulator"
+        aria-selected="false"
+      >
+        Simulator
+      </a>
+    </li>
+  </ul>
+
+  <!-- Tab Content -->
+  <div class="tab-content" id="myTabContent">
+
+    <!-- Editor Tab -->
+    <div
+      class="tab-pane fade {% if not active_tab or active_tab == 'editor' %}show active{% endif %}"
+      id="editor"
+      role="tabpanel"
+      aria-labelledby="editor-tab"
+    >
+      <h3 class="mt-3">Editor</h3>
+      <form action="{{ url_for('assemble') }}" method="POST">
+        <textarea name="editor_code" id="editor_code">{{ editor_content }}</textarea>
+        <br />
+        <button class="btn btn-primary" type="submit">Assemble from Editor</button>
+      </form>
+    </div>
+
+    <!-- Simulator Tab -->
+    <div
+      class="tab-pane fade {% if active_tab == 'simulator' %}show active{% endif %}"
+      id="simulator"
+      role="tabpanel"
+      aria-labelledby="simulator-tab"
+    >
+      <h3 class="mt-3">Simulator</h3>
+
+      <!-- Buttons: Run, Step, Reset, Assemble from Editor -->
+      <form action="{{ url_for('run_program') }}" method="POST" style="display:inline;">
+        <button class="btn btn-success" type="submit">Run</button>
+      </form>
+      <form action="{{ url_for('step_program') }}" method="POST" style="display:inline;">
+        <button class="btn btn-warning" type="submit">Step</button>
+      </form>
+      <form action="{{ url_for('reset_program') }}" method="POST" style="display:inline;">
+        <button class="btn btn-danger" type="submit">Reset</button>
+      </form>
+      <form action="{{ url_for('assemble') }}" method="POST" style="display:inline;">
+        <!-- hidden input to pass current editor code if you want to re-assemble -->
+        <input type="hidden" name="editor_code" value="{{ editor_content }}">
+        <button class="btn btn-primary" type="submit">Assemble from Editor</button>
+      </form>
+
+      <hr/>
+
+      <!-- Toggle between Registers and Memory (like a mini tab) -->
+      <div>
+        <button class="btn btn-secondary" onclick="showPane('registers')">
+          Show Registers
+        </button>
+        <button class="btn btn-secondary" onclick="showPane('memory')">
+          Show Memory
+        </button>
+      </div>
+
+      <!-- Registers Pane -->
+      <div id="registersPane">
+        <h4>Registers</h4>
+        <table class="table table-dark table-striped table-sm">
+          <thead>
+            <tr>
+              <th>Register</th>
+              <th>Value (Hex)</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for reg, val in registers.items() %}
+            <tr>
+              <td>{{ reg }}</td>
+              <td>{{ val }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Memory Pane -->
+      <div id="memoryPane" class="hidden">
+        <h4>Memory</h4>
+        <table class="table table-dark table-striped table-sm">
+          <thead>
+            <tr>
+              <th>Address</th>
+              <th>Value (Hex)</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for addr, val in memory.items() %}
+            <tr>
+              <td>{{ addr }}</td>
+              <td>{{ val }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div> <!-- end Simulator tab -->
+
+  </div> <!-- end tab-content -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  function showPane(paneName) {
+    // Show either the registersPane or the memoryPane
+    let registersPane = document.getElementById("registersPane");
+    let memoryPane = document.getElementById("memoryPane");
+    if (paneName === "registers") {
+      registersPane.classList.remove("hidden");
+      memoryPane.classList.add("hidden");
+    } else {
+      registersPane.classList.add("hidden");
+      memoryPane.classList.remove("hidden");
+    }
+  }
+</script>
+</body>
+</html>
+

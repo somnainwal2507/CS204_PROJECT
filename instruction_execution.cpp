@@ -33,6 +33,8 @@ Simulator sim;
 unordered_map<uint32_t, string> instrComments;
 // Global vector to record memory change events per cycle.
 vector<string> memChangeLog;
+// Global vector to record register change events per cycle.
+vector<string> regChangeLog;
 
 string toHex(uint32_t num) {
     stringstream ss;
@@ -349,7 +351,8 @@ void memoryAccess() {
             // Record memory change event:
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr) << "  0x" << toHexByte(value & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr)
+                      << "  0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         } else if (funct3 == 0x1) { // sh
@@ -360,12 +363,14 @@ void memoryAccess() {
                << " and 0x" << toHex(addr + 1);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr) << "  0x" << toHexByte(value & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr)
+                      << "  0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1) << "  0x" << toHexByte((value >> 8) & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1)
+                      << "  0x" << toHexByte((value >> 8) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         } else if (funct3 == 0x2) { // sw
@@ -377,22 +382,26 @@ void memoryAccess() {
                << " to addresses starting at 0x" << toHex(addr);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr) << "  0x" << toHexByte(value & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr)
+                      << "  0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1) << "  0x" << toHexByte((value >> 8) & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1)
+                      << "  0x" << toHexByte((value >> 8) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 2) << "  0x" << toHexByte((value >> 16) & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr + 2)
+                      << "  0x" << toHexByte((value >> 16) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 3) << "  0x" << toHexByte((value >> 24) & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr + 3)
+                      << "  0x" << toHexByte((value >> 24) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         } else if (funct3 == 0x3) { // sd (simulate as sw)
@@ -404,22 +413,26 @@ void memoryAccess() {
                << " to addresses starting at 0x" << toHex(addr);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr) << "  0x" << toHexByte(value & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr)
+                      << "  0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1) << "  0x" << toHexByte((value >> 8) & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1)
+                      << "  0x" << toHexByte((value >> 8) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 2) << "  0x" << toHexByte((value >> 16) & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr + 2)
+                      << "  0x" << toHexByte((value >> 16) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 3) << "  0x" << toHexByte((value >> 24) & 0xFF);
+                event << toHex(sim.clock) << ": 0x" << toHex(addr + 3)
+                      << "  0x" << toHexByte((value >> 24) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         }
@@ -433,11 +446,18 @@ void writeBack() {
     uint32_t rd = (sim.IR >> 7) & 0x1F;
     stringstream ss;
     ss << "\n==== Write Back Stage ====" << endl;
+    // For opcodes that update a register:
     if (opcode == 0x33 || opcode == 0x13 || opcode == 0x67 ||
         opcode == 0x37 || opcode == 0x17 || opcode == 0x6F) {
         if (rd != 0) {
             sim.registers[rd] = sim.RM;
             ss << "x" << rd << " updated to 0x" << toHex(sim.RM);
+            // Record register change event.
+            {
+                stringstream event;
+                event << toHex(sim.clock) << ": x" << rd << "  0x" << toHex(sim.RM);
+                regChangeLog.push_back(event.str());
+            }
         } else {
             ss << "x0 remains 0";
         }
@@ -446,6 +466,11 @@ void writeBack() {
         if (rd != 0) {
             sim.registers[rd] = sim.RM;
             ss << "x" << rd << " updated to 0x" << toHex(sim.RM) << " (loaded)";
+            {
+                stringstream event;
+                event << toHex(sim.clock) << ": x" << rd << "  0x" << toHex(sim.RM);
+                regChangeLog.push_back(event.str());
+            }
         }
     }
     ss << "\n-----------------------------";
@@ -533,16 +558,40 @@ int main() {
 
     simulate();
 
-    // Write memory change events to memory_log.mc in the specified format:
-    ofstream dataOut("memory_log.mc");
+    // Write memory change events to final_data.mc in the specified format:
+    ofstream dataOut("final_data.mc");
     if (!dataOut.is_open()) {
-        sim.log << "Error: Could not open memory_log.mc for writing." << endl;
+        sim.log << "Error: Could not open final_data.mc for writing." << endl;
         return EXIT_FAILURE;
     }
     for (const auto &event : memChangeLog) {
         dataOut << event << endl;
     }
     dataOut.close();
+
+    // Write register change events to register_log.mc
+    ofstream regOut("register_log.mc");
+    if (!regOut.is_open()) {
+        sim.log << "Error: Could not open register_log.mc for writing." << endl;
+        return EXIT_FAILURE;
+    }
+    for (const auto &event : regChangeLog) {
+        regOut << event << endl;
+    }
+    regOut.close();
+
+    // Write final state of registers to final_state.mc
+    ofstream finalRegOut("final_state.mc");
+    if (!finalRegOut.is_open()) {
+        sim.log << "Error: Could not open final_state.mc for writing." << endl;
+        return EXIT_FAILURE;
+    }
+    finalRegOut << "Final Register States:" << endl;
+    for (int i = 0; i < 32; i++) {
+        finalRegOut << "x" << i << " = 0x" << toHex(sim.registers[i]) << endl;
+    }
+    finalRegOut.close();
+
     sim.log.close();
     return EXIT_SUCCESS;
 }

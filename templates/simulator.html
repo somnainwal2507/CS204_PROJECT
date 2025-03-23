@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+  <title>Simulator</title>
+  <style>
+    body { 
+      background: #111; 
+      color: #fff; 
+      font-family: Arial, sans-serif; 
+      margin: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1, h2 {
+      margin-top: 1em;
+      margin-bottom: 0.5em;
+    }
+    table { 
+      border-collapse: collapse; 
+      margin: 1em 0; 
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #444;
+      padding: 0.5em;
+      text-align: center;
+    }
+    .highlight { 
+      background-color: #333; 
+      color: #ff0; 
+    }
+    .mem-container { 
+      max-height: 400px; 
+      overflow-y: auto; 
+      margin-top: 20px;
+    }
+    /* Button styling */
+    .btn {
+      display: inline-block;
+      background: #444;
+      color: #fff;
+      border: none;
+      padding: 10px 15px;
+      margin: 5px;
+      text-decoration: none;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .btn:hover {
+      background: #666;
+    }
+    .btn-primary { background: #007bff; }
+    .btn-danger { background: #dc3545; }
+    .btn-warning { background: #ffc107; color: #000; }
+    .btn-success { background: #28a745; }
+    .btn-secondary { background: #6c757d; }
+    .btn-info { background: #17a2b8; }
+    /* Form group for jump-to-address */
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      margin-right: 10px;
+    }
+    input[type="text"] {
+      padding: 5px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #222;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Simulator</h1>
+    <form method="POST" action="">
+      <!-- The usual simulator actions -->
+      <button type="submit" name="action" value="assemble" class="btn btn-primary">Assemble</button>
+      <button type="submit" name="action" value="reset" class="btn btn-danger">Reset</button>
+      <button type="submit" name="action" value="step" class="btn btn-warning">Step</button>
+      <button type="submit" name="action" value="run" class="btn btn-success">Run</button>
+    </form>
+
+    <!-- Button to go from Simulator to Editor -->
+    <form method="GET" action="{{ url_for('editor') }}">
+      <button type="submit" class="btn btn-secondary">Go to Editor</button>
+    </form>
+
+    <!-- Instructions Table -->
+    <h2>Instructions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>PC</th>
+          <th>Machine Code</th>
+          <th>Original Code</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i, instr in instructions|enumerate %}
+        <tr {% if i == step_index %} class="highlight" {% endif %}>
+          <td>{{ i }}</td>
+          <td>{{ instr.pc }}</td>
+          <td>{{ instr.machine_code }}</td>
+          <td>{{ instr.original_code }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Registers Section -->
+    <h2>Registers</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Register</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for reg, val in registers.items() %}
+        <tr>
+          <td>{{ reg }}</td>
+          <td>{{ val }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Memory Section -->
+    <h2>Memory</h2>
+    <!-- Jump To form -->
+    <form method="GET" action="{{ url_for('simulator') }}">
+      <div class="form-group">
+        <label for="addr_input">Jump to address:</label>
+        <input type="text" id="addr_input" name="address" placeholder="0x10000000" />
+        <button type="submit" class="btn btn-info">Go</button>
+        <button type="submit" name="move" value="up" class="btn btn-secondary">Up</button>
+        <button type="submit" name="move" value="down" class="btn btn-secondary">Down</button>
+      </div>
+    </form>
+
+    <div class="mem-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Address</th>
+            <th colspan="4">Bytes (Hex)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for word_addr, word_bytes in memory %}
+          <!-- Highlight the row if jump_addr matches -->
+          <tr {% if jump_addr == word_addr %}class="highlight"{% endif %}>
+            <td>{{ "0x%08X"|format(word_addr) }}</td>
+            {% for b in word_bytes %}
+            <td>{{ "%02X"|format(b) }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
+
