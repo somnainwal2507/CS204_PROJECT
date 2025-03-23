@@ -4,9 +4,11 @@
 #include <iomanip>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+#include <algorithm>
 
 using namespace std;
 
@@ -35,6 +37,8 @@ unordered_map<uint32_t, string> instrComments;
 vector<string> memChangeLog;
 // Global vector to record register change events per cycle.
 vector<string> regChangeLog;
+// Global set to record updated memory addresses.
+unordered_set<uint32_t> updatedMemoryAddresses;
 
 string toHex(uint32_t num) {
     stringstream ss;
@@ -53,28 +57,25 @@ void logMessage(const string &msg) {
     sim.log << msg << endl;
 }
 
-void logRegisterStates() {
-    stringstream ss;
-    ss << "-----------------------------" << endl;
-    ss << "Register States:" << endl;
-    for (int i = 0; i < 32; i++) {
-        ss << "x" << i << " = 0x" << toHex(sim.registers[i]);
-        if ((i + 1) % 4 == 0)
-            ss << endl;
-        else
-            ss << "\t";
+// Helper function to indent each line of a given string.
+string indent(const string &s) {
+    stringstream input(s);
+    stringstream output;
+    string line;
+    while (getline(input, line)) {
+        output << "    " << line << "\n";
     }
-    ss << "-----------------------------";
-    logMessage(ss.str());
+    return output.str();
 }
 
-void fetch() {
+string fetch() {
     sim.IR = sim.instrMemory[sim.PC];
-    logMessage("\n==== Fetch Stage ====");
-    logMessage("PC: 0x" + toHex(sim.PC) + "  |  Fetched IR: 0x" + toHex(sim.IR));
+    stringstream ss;
+    ss << "PC: 0x" << toHex(sim.PC) << "  |  Fetched IR: 0x" << toHex(sim.IR);
+    return ss.str();
 }
 
-void decode() {
+string decode() {
     uint32_t opcode = sim.IR & 0x7F;
     uint32_t rd     = (sim.IR >> 7)  & 0x1F;
     uint32_t funct3 = (sim.IR >> 12) & 0x7;
@@ -98,44 +99,41 @@ void decode() {
                     (((sim.IR >> 21) & 0x3FF) << 1);
     if (imm_j & 0x100000) { imm_j |= 0xFFF00000; }
 
-    // Build a presentable output for the decode stage
     stringstream ss;
-    ss << "\n==== Decode Stage ====" << endl;
-    ss << "Instruction (IR): 0x" << toHex(sim.IR) << endl;
-    ss << "Opcode: 0x" << toHex(opcode) << endl;
+    ss << "Instruction (IR): 0x" << toHex(sim.IR) << "\n";
+    ss << "Opcode: 0x" << toHex(opcode) << "\n";
 
     if (opcode == 0x33) { // R-type instructions
-        ss << "Type: R-Type" << endl;
-        ss << "rd: x" << rd << "    rs1: x" << rs1 << "    rs2: x" << rs2 << endl;
+        ss << "Type: R-Type" << "\n";
+        ss << "rd: x" << rd << "    rs1: x" << rs1 << "    rs2: x" << rs2 << "\n";
         ss << "funct3: 0x" << toHex(funct3) << "    funct7: 0x" << toHex(funct7);
     } else if (opcode == 0x03 || opcode == 0x13 || opcode == 0x67) { // I-type instructions
-        ss << "Type: I-Type" << endl;
-        ss << "rd: x" << rd << "    rs1: x" << rs1 << endl;
+        ss << "Type: I-Type" << "\n";
+        ss << "rd: x" << rd << "    rs1: x" << rs1 << "\n";
         ss << "funct3: 0x" << toHex(funct3) << "    Immediate: 0x" << toHex(imm_i);
     } else if (opcode == 0x23) { // S-type instructions
-        ss << "Type: S-Type" << endl;
-        ss << "rs1: x" << rs1 << "    rs2: x" << rs2 << endl;
+        ss << "Type: S-Type" << "\n";
+        ss << "rs1: x" << rs1 << "    rs2: x" << rs2 << "\n";
         ss << "funct3: 0x" << toHex(funct3) << "    Immediate: 0x" << toHex(imm_s);
     } else if (opcode == 0x63) { // B-type instructions
-        ss << "Type: B-Type" << endl;
-        ss << "rs1: x" << rs1 << "    rs2: x" << rs2 << endl;
+        ss << "Type: B-Type" << "\n";
+        ss << "rs1: x" << rs1 << "    rs2: x" << rs2 << "\n";
         ss << "funct3: 0x" << toHex(funct3) << "    Immediate: 0x" << toHex(imm_b);
     } else if (opcode == 0x37 || opcode == 0x17) { // U-type instructions
-        ss << "Type: U-Type" << endl;
-        ss << "rd: x" << rd << endl;
+        ss << "Type: U-Type" << "\n";
+        ss << "rd: x" << rd << "\n";
         ss << "Immediate: 0x" << toHex(imm_u);
     } else if (opcode == 0x6F) { // J-type instructions
-        ss << "Type: J-Type" << endl;
-        ss << "rd: x" << rd << endl;
+        ss << "Type: J-Type" << "\n";
+        ss << "rd: x" << rd << "\n";
         ss << "Immediate: 0x" << toHex(imm_j);
     } else {
         ss << "Unknown instruction format.";
     }
-    ss << "\n-----------------------------";
-    logMessage(ss.str());
+    return ss.str();
 }
 
-void execute() {
+string execute() {
     uint32_t opcode  = sim.IR & 0x7F;
     uint32_t rd      = (sim.IR >> 7)  & 0x1F;
     uint32_t funct3  = (sim.IR >> 12) & 0x7;
@@ -161,7 +159,6 @@ void execute() {
     sim.PC += 4;
 
     stringstream ss;
-    ss << "\n==== Execute Stage ====" << endl;
     switch (opcode) {
         case 0x33:
             if (funct7 == 0x01 && funct3 == 0x0) { // mul
@@ -244,26 +241,24 @@ void execute() {
             break;
 
         case 0x63:
-            ss << "Branch Evaluation: comparing 0x" << toHex(sim.registers[rs1])
-               << " and 0x" << toHex(sim.registers[rs2]);
             {
                 bool takeBranch = false;
                 if (funct3 == 0x0) {
                     takeBranch = (sim.registers[rs1] == sim.registers[rs2]);
-                    ss << "\nbeq: " << (takeBranch ? "taken" : "not taken");
+                    ss << "beq: " << (takeBranch ? "taken" : "not taken");
                 } else if (funct3 == 0x1) {
                     takeBranch = (sim.registers[rs1] != sim.registers[rs2]);
-                    ss << "\nbne: " << (takeBranch ? "taken" : "not taken");
+                    ss << "bne: " << (takeBranch ? "taken" : "not taken");
                 } else if (funct3 == 0x4) {
                     takeBranch = ((int32_t)sim.registers[rs1] < (int32_t)sim.registers[rs2]);
-                    ss << "\nblt: " << (takeBranch ? "taken" : "not taken");
+                    ss << "blt: " << (takeBranch ? "taken" : "not taken");
                 } else if (funct3 == 0x5) {
                     takeBranch = ((int32_t)sim.registers[rs1] >= (int32_t)sim.registers[rs2]);
-                    ss << "\nbge: " << (takeBranch ? "taken" : "not taken");
+                    ss << "bge: " << (takeBranch ? "taken" : "not taken");
                 }
                 if (takeBranch) {
                     sim.PC = currentPC + imm_b;
-                    ss << "\nBranch taken. New PC: 0x" << toHex(sim.PC);
+                    ss << " | Branch taken, New PC: 0x" << toHex(sim.PC);
                 }
             }
             break;
@@ -302,15 +297,13 @@ void execute() {
             ss << "Unknown opcode: 0x" << toHex(opcode);
             break;
     }
-    ss << "\n-----------------------------";
-    logMessage(ss.str());
+    return ss.str();
 }
 
-void memoryAccess() {
+string memoryAccess() {
     uint32_t opcode = sim.IR & 0x7F;
     uint32_t funct3 = (sim.IR >> 12) & 0x7;
     stringstream ss;
-    ss << "\n==== Memory Access Stage ====" << endl;
     if (opcode == 0x03) { // Load instructions
         uint32_t addr = sim.RY;
         if (funct3 == 0x0) { // lb
@@ -348,7 +341,7 @@ void memoryAccess() {
             sim.dataMemory[addr] = value & 0xFF;
             ss << "sb store 0x" << toHex(value & 0xFF)
                << " to address 0x" << toHex(addr);
-            // Record memory change event:
+            updatedMemoryAddresses.insert(addr);
             {
                 stringstream event;
                 event << toHex(sim.clock) << ": 0x" << toHex(addr)
@@ -361,6 +354,8 @@ void memoryAccess() {
             ss << "sh store 0x" << toHex(value)
                << " to addresses 0x" << toHex(addr)
                << " and 0x" << toHex(addr + 1);
+            updatedMemoryAddresses.insert(addr);
+            updatedMemoryAddresses.insert(addr + 1);
             {
                 stringstream event;
                 event << toHex(sim.clock) << ": 0x" << toHex(addr)
@@ -380,6 +375,10 @@ void memoryAccess() {
             sim.dataMemory[addr + 3] = (value >> 24) & 0xFF;
             ss << "sw store 0x" << toHex(value)
                << " to addresses starting at 0x" << toHex(addr);
+            updatedMemoryAddresses.insert(addr);
+            updatedMemoryAddresses.insert(addr + 1);
+            updatedMemoryAddresses.insert(addr + 2);
+            updatedMemoryAddresses.insert(addr + 3);
             {
                 stringstream event;
                 event << toHex(sim.clock) << ": 0x" << toHex(addr)
@@ -411,6 +410,10 @@ void memoryAccess() {
             sim.dataMemory[addr + 3] = (value >> 24) & 0xFF;
             ss << "sd store 0x" << toHex(value)
                << " to addresses starting at 0x" << toHex(addr);
+            updatedMemoryAddresses.insert(addr);
+            updatedMemoryAddresses.insert(addr + 1);
+            updatedMemoryAddresses.insert(addr + 2);
+            updatedMemoryAddresses.insert(addr + 3);
             {
                 stringstream event;
                 event << toHex(sim.clock) << ": 0x" << toHex(addr)
@@ -437,22 +440,18 @@ void memoryAccess() {
             }
         }
     }
-    ss << "\n-----------------------------";
-    logMessage(ss.str());
+    return ss.str();
 }
 
-void writeBack() {
+string writeBack() {
     uint32_t opcode = sim.IR & 0x7F;
     uint32_t rd = (sim.IR >> 7) & 0x1F;
     stringstream ss;
-    ss << "\n==== Write Back Stage ====" << endl;
-    // For opcodes that update a register:
     if (opcode == 0x33 || opcode == 0x13 || opcode == 0x67 ||
         opcode == 0x37 || opcode == 0x17 || opcode == 0x6F) {
         if (rd != 0) {
             sim.registers[rd] = sim.RM;
             ss << "x" << rd << " updated to 0x" << toHex(sim.RM);
-            // Record register change event.
             {
                 stringstream event;
                 event << toHex(sim.clock) << ": x" << rd << "  0x" << toHex(sim.RM);
@@ -473,23 +472,33 @@ void writeBack() {
             }
         }
     }
-    ss << "\n-----------------------------";
-    logMessage(ss.str());
+    return ss.str();
 }
 
 void simulate() {
     while (true) {
         if (sim.instrMemory.find(sim.PC) == sim.instrMemory.end()) {
-            logMessage("\nNo instruction found at PC = 0x" + toHex(sim.PC) + ". Halting.");
+            logMessage("No instruction found at PC = 0x" + toHex(sim.PC) + ". Halting.");
             break;
         }
-        fetch();
-        decode();
-        execute();
-        memoryAccess();
-        writeBack();
-        logRegisterStates();
-        logMessage("Clock Cycle: 0x" + toHex(sim.clock));
+        // Get the stage outputs.
+        string fetchStage     = fetch();
+        string decodeStage    = decode();
+        string executeStage   = execute();
+        string memAccessStage = memoryAccess();
+        string writeBackStage = writeBack();
+        
+        // Group the outputs in the desired format.
+        stringstream cycleLog;
+        cycleLog << "## Clock cycle: " << toHex(sim.clock) << " ##\n\n";
+        cycleLog << "Step 1 => Fetch:\n" << indent(fetchStage) << "\n";
+        cycleLog << "Step 2 => Decode:\n" << indent(decodeStage) << "\n";
+        cycleLog << "Step 3 => Execute:\n" << indent(executeStage) << "\n";
+        cycleLog << "Step 4 => Memory Access:\n" << indent(memAccessStage) << "\n";
+        cycleLog << "Step 5 => Write back:\n" << indent(writeBackStage) << "\n";
+        cycleLog << "=============================== \n";
+        logMessage(cycleLog.str());
+        
         sim.clock++;
     }
 }
@@ -539,7 +548,6 @@ int main() {
         if (!inDataSegment) {
             uint32_t machineCode = stoul(valueStr, nullptr, 16);
             sim.instrMemory[addr] = machineCode;
-            // Store the comment in case it is needed later.
             if (!comment.empty()) {
                 instrComments[addr] = comment;
             }
@@ -558,16 +566,6 @@ int main() {
 
     simulate();
 
-    // Write memory change events to final_data.mc in the specified format:
-    ofstream dataOut("final_data.mc");
-    if (!dataOut.is_open()) {
-        sim.log << "Error: Could not open final_data.mc for writing." << endl;
-        return EXIT_FAILURE;
-    }
-    for (const auto &event : memChangeLog) {
-        dataOut << event << endl;
-    }
-    dataOut.close();
 
     // Write register change events to register_log.mc
     ofstream regOut("register_log.mc");
@@ -591,6 +589,21 @@ int main() {
         finalRegOut << "x" << i << " = 0x" << toHex(sim.registers[i]) << endl;
     }
     finalRegOut.close();
+
+    // Write final memory state for updated addresses to final_data.mc
+    ofstream memFinalOut("final_data.mc");
+    if (!memFinalOut.is_open()) {
+        sim.log << "Error: Could not open final_data.mc for writing." << endl;
+        return EXIT_FAILURE;
+    }
+    // Copy the addresses into a vector and sort them.
+    vector<uint32_t> updatedAddrs(updatedMemoryAddresses.begin(), updatedMemoryAddresses.end());
+    sort(updatedAddrs.begin(), updatedAddrs.end());
+    memFinalOut << "Final Updated Memory State:" << endl;
+    for (auto addr : updatedAddrs) {
+        memFinalOut << "0x" << toHex(addr) << " = 0x" << toHexByte(sim.dataMemory[addr]) << endl;
+    }
+    memFinalOut.close();
 
     sim.log.close();
     return EXIT_SUCCESS;
