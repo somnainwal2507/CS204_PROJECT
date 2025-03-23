@@ -291,7 +291,7 @@ def parse_output_mc(filename):
         return [], []  # or however you want to handle missing file
 
     instructions = []
-    memory       = []
+    memory       = get_default_memory_dict() 
     found_data_segment = False
 
     with open(filename, 'r') as f:
@@ -338,14 +338,20 @@ def parse_output_mc(filename):
                 #
                 parts = line.split()
                 if len(parts) == 2:
-                    addr, val = parts
-                    # Convert them if you want
-                    # address_int = int(addr, 16)
-                    # value_int   = int(val, 16)
-                    memory.append((addr, val))
+                    addr_str, val_str = parts
+                    try:
+                        addr_int = int(addr_str, 16)
+                        val_int  = int(val_str, 16)
+                    except ValueError:
+                        # skip or handle error
+                        continue
+
+                    # Store in the dictionary: memory[address] = value
+                    memory[addr_int] = val_int
+
                 else:
-                    # Possibly skip or handle differently if the format is unexpected
-                    memory.append((line, "???"))
+                    # If the line doesn't match the expected format, skip it
+                    continue
 
     return instructions, memory
 
