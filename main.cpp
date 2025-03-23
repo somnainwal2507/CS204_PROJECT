@@ -212,6 +212,8 @@ string UJbitString(const vector<string> &instr) {
     return oss.str();
 }
 
+
+
 int main() {
     map<string,int> varmap;
     map<int,int> dataSegment;
@@ -268,7 +270,6 @@ int main() {
             flag = 1;
             continue;
         }
-
         // In .data section, process variables and directives.
         if(flag) {
             if(tokens[0][(tokens[0]).size()-1]==':'){
@@ -459,7 +460,14 @@ int main() {
 
         if(!flag) {
             ostringstream instrStr;
-            instrStr << tokens[0];
+            for(int i=0; i<(int)tokens.size(); i++) {
+                if(tokens[i][0] != 'x'){
+                    if(register_map.find(tokens[i]) != register_map.end()){
+                        tokens[i] = register_map[tokens[i]];
+                    }
+                } 
+            }
+            instrStr << tokens[0];    
             for(int i = 1; i < (int)tokens.size(); i++) {
                 if(i == 1)
                     instrStr << " " << tokens[i];
