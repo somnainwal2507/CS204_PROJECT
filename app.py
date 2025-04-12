@@ -29,7 +29,7 @@ def editor():
 
         # 3. Run your existing executables
         subprocess.run(['./main'])
-        subprocess.run(['./simulator'])
+        subprocess.run(['./instruction_execution'])
 
         # 4. Reset step index and logs for fresh simulation
         session['step_index'] = 0
@@ -84,12 +84,12 @@ def simulator():
         elif action == 'assemble':
             if os.path.exists('input.asm'):
                 subprocess.run(['./main'])
-                subprocess.run(['./simulator'])
+                subprocess.run(['./instruction_execution'])
             session['step_index'] = 0
             registers = get_default_registers()
             # Let’s say data_seg is a list of (addr_str, val_str),
             # we can convert that to a dict { addr_int : val_int } if needed
-            raw_memory_dict = convert_data_list_to_dict(data_seg)
+            raw_memory_dict = data_seg
         else:
             # No recognized action
             registers = get_default_registers()
@@ -132,7 +132,6 @@ def simulator():
 
     # 6) Get the current step index for highlighting instructions
     current_step = session['step_index']
-
     return render_template(
         'simulator.html',
         instructions=instructions,
@@ -197,10 +196,10 @@ def convert_data_list_to_dict(data_seg):
     convert to { 0x10000000: 0x05, 0x10000001: 0x00, ... }
     """
     mem = {}
-    for addr_str, val_str in data_seg:
+    for addr_str in data_seg:
         try:
             addr_int = int(addr_str, 16)
-            val_int  = int(val_str, 16)
+            val_int  = int(data_seg[addr_str], 16)
         except ValueError:
             # skip or handle error
             continue
@@ -208,71 +207,6 @@ def convert_data_list_to_dict(data_seg):
     return mem
 
 
-# @app.route('/simulator', methods=['GET', 'POST'])
-# def simulator():
-#     # Ensure we have a step counter in session
-#     if 'step_index' not in session:
-#         session['step_index'] = 0
-
-#     # Load all instructions from output.mc (if it exists)
-#     instructions, data_seg = parse_output_mc('output.mc')
-
-#     # Determine action
-#     if request.method == 'POST':
-#         action = request.form.get('action', '')
-
-#         if action == 'run':
-#             # "Run" -> parse final_state.mc & final_data.mc for final registers/memory
-#             # Also show all instructions (highlight the last one, or none)
-#             session['step_index'] = len(instructions)  # highlight "beyond last"
-#             registers = parse_final_state('final_state.mc')
-#             memory = parse_final_data('final_data.mc')
-
-#         elif action == 'step':
-#             # "Step" -> increment step_index by 1, parse that step from logs
-#             # (We assume register_log.mc and memory_log.mc each contain a line per step.)
-#             session['step_index'] += 1
-#             step_idx = session['step_index']
-#             registers = parse_register_log('register_log.mc', step_idx)
-#             memory = parse_memory_log('memory_log.mc', step_idx)
-
-#         elif action == 'reset':
-#             # "Reset" -> reset step index, revert to default registers/memory
-#             session['step_index'] = 0
-#             registers = get_default_registers()
-#             memory = get_default_memory()
-
-#         elif action == 'assemble':
-#             # Rerun the executables with existing input.asm
-#             if os.path.exists('input.asm'):
-#                 subprocess.run(['./main'])
-#                 subprocess.run(['./simulator'])
-#             # Optionally reset step index or parse final logs immediately
-#             session['step_index'] = 0
-#             registers = get_default_registers()
-#             memory = data_seg  # show data segment
-
-#         else:
-#             # No recognized action
-#             registers = get_default_registers()
-#             memory = get_default_memory()
-
-#     else:
-#         # GET request -> show default registers/memory if nothing else done
-#         registers = get_default_registers()
-#         memory = get_default_memory()
-
-#     # Now we have registers, memory, instructions, and step_index
-#     current_step = session['step_index']
-
-#     # Render simulator
-#     return render_template(
-#         'simulator.html',
-#         registers=registers,
-#         memory=memory,
-#         instructions=instructions,
-#         step_index=current_step
-#     )
 
 # ----------------------------------------------------------------------------
 # 3. PARSING FUNCTIONS
@@ -359,25 +293,16 @@ def parse_output_mc(filename):
 
 
 def parse_final_state(filename):
-    """
-    final_state.mc lines:
-      x0 = 0x00000000
-      x1 = 0x00000000
-      ...
-    Return list of (register_name, value)
-    """
-    regs = []
+    regs = {}
     if os.path.exists(filename):
         with open(filename, 'r') as f:
             for line in f:
                 line = line.strip()
-                if line:
-                    if '=' in line:
-                        reg, val = line.split('=', 1)
-                        reg = reg.strip()
-                        val = val.strip()
-                        regs.append((reg, val))
+                if line and '=' in line and line.startswith("x"):
+                    reg, val = line.split('=', 1)
+                    regs[reg.strip()] = val.strip()
     return regs
+
 
 import os
 
@@ -441,56 +366,42 @@ def parse_final_data(filename):
 #                         mem.append((parts[0], parts[1]))
 #     return mem
 
-
 def parse_register_log(filename, step_idx):
     """
-    register_log.mc might contain multiple lines per step or 1 line per step. 
-    For simplicity, assume 1 line per register per step, separated by steps.
-    Example:
-      Step 0:
-        x0 = 0x00000000
-        x1 = 0x00000001
-      Step 1:
-        x0 = 0x00000000
-        x1 = 0x00000002
-    We'll parse them in blocks of 32 lines (if each step has 32 registers).
-    Adjust logic as needed to match your real log format.
+    Parses event-style register_log.mc, returning register state at step_idx.
+    Format:
+      00000001: x5  0x00000001
+      00000002: x6  0x00000002
+    Means at clock cycle 1, x5 was updated to 0x00000001, etc.
     """
-    default = get_default_registers()
+    registers = get_default_registers()
+
     if not os.path.exists(filename):
-        return default
+        return registers
 
-    lines = []
     with open(filename, 'r') as f:
-        lines = [ln.strip() for ln in f if ln.strip()]
+        for line in f:
+            line = line.strip()
+            if not line or ':' not in line:
+                continue
 
-    # Suppose each step has 32 lines, one per register
-    regs_per_step = 32
-    start = step_idx * regs_per_step
-    end = start + regs_per_step
+            try:
+                # Split into: timestamp, reg, value
+                timestamp_part, rest = line.split(":", 1)
+                clock = int(timestamp_part.strip(), 16)
 
-    # If step_idx is beyond the file, return the last known or default
-    if start >= len(lines):
-        return default
+                if clock > step_idx:
+                    continue  # skip future changes
 
-    block = lines[start:end]
-    regs = []
-    for line in block:
-        if '=' in line:
-            reg, val = line.split('=', 1)
-            reg = reg.strip()
-            val = val.strip()
-            regs.append((reg, val))
+                parts = rest.strip().split()
+                if len(parts) == 2:
+                    reg, val = parts
+                    registers[reg] = val
+            except Exception as e:
+                continue  # ignore bad lines
 
-    # If we got fewer than 32 lines, fill up with default or do something
-    if len(regs) < regs_per_step:
-        # Just add missing lines from default
-        existing_reg_names = {r[0] for r in regs}
-        for (dreg, dval) in default:
-            if dreg not in existing_reg_names:
-                regs.append((dreg, dval))
+    return registers
 
-    return regs
 
 def parse_memory_log(filename, step_idx):
     """
