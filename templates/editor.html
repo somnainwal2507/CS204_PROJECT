@@ -1,6 +1,14 @@
 {% extends "layout.html" %}
 {% block title %}RISC-V Editor{% endblock %}
 {% block content %}
+<style>
+  /* Style for the RISC-V code text area */
+  #code {
+    background-color: #2d2d2d; /* dark gray background */
+    color: #ffffe0;            /* light yellow text */
+  }
+</style>
+
 <h1>Editor</h1>
 <form method="POST" action="{{ url_for('editor') }}">
   <div class="mb-3">
@@ -10,3 +18,4 @@
   <button type="submit" class="btn btn-primary">Simulate</button>
 </form>
 {% endblock %}
+
