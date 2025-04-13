@@ -21,6 +21,7 @@ struct Simulator {
     uint32_t RM;
     uint32_t RY;
     uint32_t clock;
+    uint32_t lastPC; 
     ofstream log;
 
     Simulator() : PC(0), IR(0), RM(0), RY(0), clock(1) {
@@ -156,6 +157,7 @@ string execute() {
     if (imm_j & 0x100000) { imm_j |= 0xFFF00000; }
 
     uint32_t currentPC = sim.PC;
+    sim.lastPC = sim.PC;
     sim.PC += 4;
 
     stringstream ss;
@@ -344,8 +346,11 @@ string memoryAccess() {
             updatedMemoryAddresses.insert(addr);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr)
-                      << "  0x" << toHexByte(value & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr)
+                    << " = 0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         } else if (funct3 == 0x1) { // sh
@@ -358,14 +363,20 @@ string memoryAccess() {
             updatedMemoryAddresses.insert(addr + 1);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr)
-                      << "  0x" << toHexByte(value & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr)
+                    << " = 0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1)
-                      << "  0x" << toHexByte((value >> 8) & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr+1)
+                    << " = 0x" << toHexByte((value>>8) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         } else if (funct3 == 0x2) { // sw
@@ -381,26 +392,38 @@ string memoryAccess() {
             updatedMemoryAddresses.insert(addr + 3);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr)
-                      << "  0x" << toHexByte(value & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr)
+                    << " = 0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1)
-                      << "  0x" << toHexByte((value >> 8) & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr+1)
+                    << " = 0x" << toHexByte((value>>8) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 2)
-                      << "  0x" << toHexByte((value >> 16) & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr+2)
+                    << " = 0x" << toHexByte((value>>16) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 3)
-                      << "  0x" << toHexByte((value >> 24) & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr+3)
+                    << " = 0x" << toHexByte((value>>24) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         } else if (funct3 == 0x3) { // sd (simulate as sw)
@@ -416,26 +439,38 @@ string memoryAccess() {
             updatedMemoryAddresses.insert(addr + 3);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr)
-                      << "  0x" << toHexByte(value & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr)
+                    << " = 0x" << toHexByte(value & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 1)
-                      << "  0x" << toHexByte((value >> 8) & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr+1)
+                    << " = 0x" << toHexByte((value>>8) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 2)
-                      << "  0x" << toHexByte((value >> 16) & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr+2)
+                    << " = 0x" << toHexByte((value>>16) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": 0x" << toHex(addr + 3)
-                      << "  0x" << toHexByte((value >> 24) & 0xFF);
+                event
+                    << sim.clock            
+                    << ": PC=0x" << toHex(sim.lastPC)
+                    << ", 0x" << toHex(addr+3)
+                    << " = 0x" << toHexByte((value>>24) & 0xFF);
                 memChangeLog.push_back(event.str());
             }
         }
@@ -593,7 +628,18 @@ int main() {
         finalRegOut << "x" << i << " = 0x" << toHex(sim.registers[i]) << endl;
     }
     finalRegOut.close();
-
+    
+    // Write out all memory‐write events in the requested format
+    ofstream memLogOut("memory_log.mc");
+    if (!memLogOut.is_open()) {
+        sim.log << "Error: Could not open memory_log.mc for writing." << endl;
+        return EXIT_FAILURE;
+    }
+    for (const auto &event : memChangeLog) {
+        memLogOut << event << "\n";
+    }
+    memLogOut.close();
+    
     // Write final memory state for updated addresses to final_data.mc
     ofstream memFinalOut("final_data.mc");
     if (!memFinalOut.is_open()) {
