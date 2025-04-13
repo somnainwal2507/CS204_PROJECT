@@ -56,6 +56,9 @@ def simulator():
     if 'step_index' not in session:
         session['step_index'] = 0
 
+    step_idx = session['step_index']
+    highlight_pc_int = None
+
     # 1) Load instructions & data segment from output.mc (if it exists)
     instructions, data_seg = parse_output_mc('output.mc')
 
@@ -64,93 +67,175 @@ def simulator():
         action = request.form.get('action', '')
 
         if action == 'run':
-            # parse final_state.mc & final_data.mc for final registers/memory
+            # Parse final state of registers/memory
             session['step_index'] = len(instructions)  # highlight "beyond last"
             registers = parse_final_state('final_state.mc')
-            # final_data.mc => raw memory
-            raw_memory_dict = parse_final_data('final_data.mc')  
-            
+            raw_memory_dict = parse_final_data('final_data.mc')
+            current_pc = None
+
         elif action == 'step':
             session['step_index'] += 1
             step_idx = session['step_index']
-            registers = parse_register_log('register_log.mc', step_idx)
+            registers, highlight_pc_int = parse_register_log('register_log.mc', step_idx)
             raw_memory_dict = parse_memory_log('memory_log.mc', step_idx)
 
         elif action == 'reset':
             session['step_index'] = 0
             registers = get_default_registers()
-            raw_memory_dict = get_default_memory_dict()  # e.g. {addr_int: byte_int}
-
-        # elif action == 'assemble':
-        #     # Get code from editor and write to input.asm
-        #     code = request.form.get('code', '')
-        #     with open('input.asm', 'w') as f:
-        #         f.write(code)
-
-        #     if os.path.exists('input.asm'):
-        #         subprocess.run(['./main'])
-        #         subprocess.run(['./instruction_execution'])
-        #     session['step_index'] = 0
-        #     registers = get_default_registers()
-        #     # Let’s say data_seg is a list of (addr_str, val_str),
-        #     # we can convert that to a dict { addr_int : val_int } if needed
-        #     raw_memory_dict = data_seg
+            raw_memory_dict = get_default_memory_dict()
+            current_pc = None
         else:
-            # No recognized action
             registers = get_default_registers()
             raw_memory_dict = get_default_memory_dict()
+            current_pc = None
     else:
-        #  GET request => show default registers/memory if nothing else is done
+        # GET request: show default registers/memory
         registers = get_default_registers()
         raw_memory_dict = get_default_memory_dict()
+        current_pc = None
 
-    # 3) Handle the "Jump to" logic (GET parameters: address=..., move=...)
+    # 3) Handle "Jump to" logic (unchanged) ...
+    # (Your existing jump-to address logic remains the same)
     address_hex = request.args.get('address', None)
     move_cmd    = request.args.get('move', None)
     jump_addr   = None
-    
-    # Convert 'address' param from hex to int if given
     if address_hex:
         try:
             jump_addr = int(address_hex, 16)
         except ValueError:
-            jump_addr = None  # ignore bad input
-
-    # If user clicked up/down, shift jump_addr by some fixed offset
-    # e.g., 10 words (40 bytes)
+            jump_addr = None
     if jump_addr and move_cmd:
         WORD_SIZE = 4
-        SHIFT_COUNT = 10  # how many words to skip
+        SHIFT_COUNT = 10
         offset = WORD_SIZE * SHIFT_COUNT
         if move_cmd == 'up':
             jump_addr += offset
         elif move_cmd == 'down':
             jump_addr -= offset
 
-    # 4) Convert raw_memory_dict => chunked list for the template
-    #    Something like: [ (addr, [b0,b1,b2,b3]), ... ] in descending order
+    # 4) Convert raw_memory_dict to chunked memory
     memory_chunked = chunk_memory_into_words(raw_memory_dict)
 
-    # 5) If you literally want to show *all* addresses, pass memory_chunked as is.
-    #    Otherwise, you can filter around jump_addr if you only want a "window."
-    # memory_chunked = slice_memory_around(memory_chunked, jump_addr, radius=10)
-
-    # 6) Get the current step index for highlighting instructions
+    # 5) Get the current step index (for other uses if needed)
     current_step = session['step_index']
 
+    # 6) Read code from input.asm to pass to the template
     code = ''
     if os.path.exists('input.asm'):
         with open('input.asm', 'r') as f:
             code = f.read()
+    
     return render_template(
         'simulator.html',
         instructions=instructions,
-        registers=registers,
+				registers=registers,
         memory=memory_chunked,
-        step_index=current_step,
-        jump_addr=jump_addr,
+				step_index=step_idx,
+        highlight_pc_int=highlight_pc_int,
+				jump_addr=jump_addr,
         code=code
-    )
+		)
+
+# def simulator():
+#     # Ensure we have a step counter in session
+#     if 'step_index' not in session:
+#         session['step_index'] = 0
+
+#     # 1) Load instructions & data segment from output.mc (if it exists)
+#     instructions, data_seg = parse_output_mc('output.mc')
+
+#     # 2) Determine action if POST
+#     if request.method == 'POST':
+#         action = request.form.get('action', '')
+
+#         if action == 'run':
+#             # parse final_state.mc & final_data.mc for final registers/memory
+#             session['step_index'] = len(instructions)  # highlight "beyond last"
+#             registers = parse_final_state('final_state.mc')
+#             # final_data.mc => raw memory
+#             raw_memory_dict = parse_final_data('final_data.mc')  
+            
+#         elif action == 'step':
+#             session['step_index'] += 1
+#             step_idx = session['step_index']
+#             registers = parse_register_log('register_log.mc', step_idx)
+#             raw_memory_dict = parse_memory_log('memory_log.mc', step_idx)
+
+#         elif action == 'reset':
+#             session['step_index'] = 0
+#             registers = get_default_registers()
+#             raw_memory_dict = get_default_memory_dict()  # e.g. {addr_int: byte_int}
+
+#         # elif action == 'assemble':
+#         #     # Get code from editor and write to input.asm
+#         #     code = request.form.get('code', '')
+#         #     with open('input.asm', 'w') as f:
+#         #         f.write(code)
+
+#         #     if os.path.exists('input.asm'):
+#         #         subprocess.run(['./main'])
+#         #         subprocess.run(['./instruction_execution'])
+#         #     session['step_index'] = 0
+#         #     registers = get_default_registers()
+#         #     # Let’s say data_seg is a list of (addr_str, val_str),
+#         #     # we can convert that to a dict { addr_int : val_int } if needed
+#         #     raw_memory_dict = data_seg
+#         else:
+#             # No recognized action
+#             registers = get_default_registers()
+#             raw_memory_dict = get_default_memory_dict()
+#     else:
+#         #  GET request => show default registers/memory if nothing else is done
+#         registers = get_default_registers()
+#         raw_memory_dict = get_default_memory_dict()
+
+#     # 3) Handle the "Jump to" logic (GET parameters: address=..., move=...)
+#     address_hex = request.args.get('address', None)
+#     move_cmd    = request.args.get('move', None)
+#     jump_addr   = None
+    
+#     # Convert 'address' param from hex to int if given
+#     if address_hex:
+#         try:
+#             jump_addr = int(address_hex, 16)
+#         except ValueError:
+#             jump_addr = None  # ignore bad input
+
+#     # If user clicked up/down, shift jump_addr by some fixed offset
+#     # e.g., 10 words (40 bytes)
+#     if jump_addr and move_cmd:
+#         WORD_SIZE = 4
+#         SHIFT_COUNT = 10  # how many words to skip
+#         offset = WORD_SIZE * SHIFT_COUNT
+#         if move_cmd == 'up':
+#             jump_addr += offset
+#         elif move_cmd == 'down':
+#             jump_addr -= offset
+
+#     # 4) Convert raw_memory_dict => chunked list for the template
+#     #    Something like: [ (addr, [b0,b1,b2,b3]), ... ] in descending order
+#     memory_chunked = chunk_memory_into_words(raw_memory_dict)
+
+#     # 5) If you literally want to show *all* addresses, pass memory_chunked as is.
+#     #    Otherwise, you can filter around jump_addr if you only want a "window."
+#     # memory_chunked = slice_memory_around(memory_chunked, jump_addr, radius=10)
+
+#     # 6) Get the current step index for highlighting instructions
+#     current_step = session['step_index']
+
+#     code = ''
+#     if os.path.exists('input.asm'):
+#         with open('input.asm', 'r') as f:
+#             code = f.read()
+#     return render_template(
+#         'simulator.html',
+#         instructions=instructions,
+#         registers=registers,
+#         memory=memory_chunked,
+#         step_index=current_step,
+#         jump_addr=jump_addr,
+#         code=code
+#     )
 
 
 def chunk_memory_into_words(mem_dict):
@@ -226,79 +311,133 @@ def convert_data_list_to_dict(data_seg):
 import os
 
 def parse_output_mc(filename):
-    """
-    Reads 'output.mc' lines and separates into instructions vs. data segment.
-    Returns (instructions, memory) where:
-      - instructions is a list of dicts
-      - memory is a list (or dict) of data lines
-    """
     if not os.path.exists(filename):
-        return [], []  # or however you want to handle missing file
-
+        return [], {}
+    
     instructions = []
-    memory       = get_default_memory_dict() 
+    memory = get_default_memory_dict()
     found_data_segment = False
 
     with open(filename, 'r') as f:
         for line in f:
             line = line.strip()
             if not line:
-                continue  # skip blank lines
+                continue
 
-            # If we see "Data Segment", switch to reading memory lines
+            # Check for the data segment boundary.
             if line == "Data Segment":
                 found_data_segment = True
                 continue
 
             if not found_data_segment:
-                #
-                # Parse as instruction
-                #
-                # For example, line might look like:
-                #   "0x00001000 0x00000513 addi x10, x0, 0 # comment"
-                #
-                # We'll do a split with maxsplit=3 to separate them into
-                # pc, machine_code, basic_code, and anything else in 'original_code'.
+                # Example: "0x00001000 0x00000513 addi x10, x0, 0 # comment"
                 line_no_comment = line.split('#', 1)[0].strip()
                 parts = line_no_comment.split(maxsplit=3)
-
-                # fallback if not enough parts
-                pc            = parts[0] if len(parts) > 0 else ''
-                machine_code  = parts[1] if len(parts) > 1 else ''
-                # basic_code    = parts[2] if len(parts) > 2 else ''
+                pc_str = parts[0] if len(parts) > 0 else ''
+                machine_code = parts[1] if len(parts) > 1 else ''
                 original_code = parts[3] if len(parts) > 3 else ''
-
-                # Append to instructions list
+                
+                try:
+                    # Convert the PC string to an integer (base 16)
+                    pc_int = int(pc_str, 16)
+                except ValueError:
+                    pc_int = None
+                
                 instructions.append({
-                    'pc': pc,
+                    'pc': pc_str,       # The original string for display
+                    'pc_int': pc_int,   # The integer version for comparing
                     'machine_code': machine_code,
                     'original_code': original_code
                 })
             else:
-                #
-                # Parse as memory data line
-                #
-                # Typically these lines are like: "0x10000000 0x5"
-                # You can store them as a dict, or just keep them in a list
-                #
+                # Code for reading memory (unchanged)
                 parts = line.split()
                 if len(parts) == 2:
                     addr_str, val_str = parts
                     try:
                         addr_int = int(addr_str, 16)
-                        val_int  = int(val_str, 16)
+                        val_int = int(val_str, 16)
+                        memory[addr_int] = val_int
                     except ValueError:
-                        # skip or handle error
-                        continue
-
-                    # Store in the dictionary: memory[address] = value
-                    memory[addr_int] = val_int
-
-                else:
-                    # If the line doesn't match the expected format, skip it
-                    continue
-
+                        pass
+    
     return instructions, memory
+
+
+#def parse_output_mc(filename):
+#    """
+#    Reads 'output.mc' lines and separates into instructions vs. data segment.
+#    Returns (instructions, memory) where:
+#      - instructions is a list of dicts
+#      - memory is a list (or dict) of data lines
+#    """
+#    if not os.path.exists(filename):
+#        return [], []  # or however you want to handle missing file
+
+#    instructions = []
+#    memory       = get_default_memory_dict() 
+#    found_data_segment = False
+
+#    with open(filename, 'r') as f:
+#        for line in f:
+#            line = line.strip()
+#            if not line:
+#                continue  # skip blank lines
+
+#            # If we see "Data Segment", switch to reading memory lines
+#            if line == "Data Segment":
+#                found_data_segment = True
+#                continue
+
+#            if not found_data_segment:
+#                #
+#                # Parse as instruction
+#                #
+#                # For example, line might look like:
+#                #   "0x00001000 0x00000513 addi x10, x0, 0 # comment"
+#                #
+#                # We'll do a split with maxsplit=3 to separate them into
+#                # pc, machine_code, basic_code, and anything else in 'original_code'.
+#                line_no_comment = line.split('#', 1)[0].strip()
+#                parts = line_no_comment.split(maxsplit=3)
+
+#                # fallback if not enough parts
+#                pc            = parts[0] if len(parts) > 0 else ''
+#                machine_code  = parts[1] if len(parts) > 1 else ''
+#                # basic_code    = parts[2] if len(parts) > 2 else ''
+#                original_code = parts[3] if len(parts) > 3 else ''
+
+#                # Append to instructions list
+#                instructions.append({
+#                    'pc': pc,
+#                    'machine_code': machine_code,
+#                    'original_code': original_code
+#                })
+#            else:
+#                #
+#                # Parse as memory data line
+#                #
+#                # Typically these lines are like: "0x10000000 0x5"
+#                # You can store them as a dict, or just keep them in a list
+#                #
+#                parts = line.split()
+#                if len(parts) == 2:
+#                    addr_str, val_str = parts
+#                    try:
+#                        addr_int = int(addr_str, 16)
+#                        val_int  = int(val_str, 16)
+#                    except ValueError:
+#                        # skip or handle error
+#                        continue
+
+#                    # Store in the dictionary: memory[address] = value
+#                    memory[addr_int] = val_int
+
+#                else:
+#                    # If the line doesn't match the expected format, skip it
+#                    continue
+
+#    return instructions, memory
 
 
 
@@ -377,18 +516,52 @@ def parse_final_data(filename):
 #                         mem.append((parts[0], parts[1]))
 #     return mem
 
+# def parse_register_log(filename, step_idx):
+#     """
+#     Parses event-style register_log.mc, returning register state at step_idx.
+#     Format:
+#       00000001: x5  0x00000001
+#       00000002: x6  0x00000002
+#     Means at clock cycle 1, x5 was updated to 0x00000001, etc.
+#     """
+#     registers = get_default_registers()
+
+#     if not os.path.exists(filename):
+#         return registers
+
+#     with open(filename, 'r') as f:
+#         for line in f:
+#             line = line.strip()
+#             if not line or ':' not in line:
+#                 continue
+
+#             try:
+#                 # Split into: timestamp, reg, value
+#                 timestamp_part, rest = line.split(":", 1)
+#                 clock = int(timestamp_part.strip(), 16)
+
+#                 if clock > step_idx:
+#                     continue  # skip future changes
+
+#                 parts = rest.strip().split()
+#                 if len(parts) == 2:
+#                     reg, val = parts
+#                     registers[reg] = val
+#             except Exception as e:
+#                 continue  # ignore bad lines
+
+#     return registers
+
 def parse_register_log(filename, step_idx):
     """
-    Parses event-style register_log.mc, returning register state at step_idx.
-    Format:
-      00000001: x5  0x00000001
-      00000002: x6  0x00000002
-    Means at clock cycle 1, x5 was updated to 0x00000001, etc.
+    Returns (registers, highlight_pc_int) where highlight_pc_int is the PC (as an integer)
+    from the last log entry up to the current step.
     """
     registers = get_default_registers()
+    highlight_pc_int = None
 
     if not os.path.exists(filename):
-        return registers
+        return registers, highlight_pc_int
 
     with open(filename, 'r') as f:
         for line in f:
@@ -397,21 +570,85 @@ def parse_register_log(filename, step_idx):
                 continue
 
             try:
-                # Split into: timestamp, reg, value
+                # Split timestamp and the remaining part of the log entry.
                 timestamp_part, rest = line.split(":", 1)
                 clock = int(timestamp_part.strip(), 16)
 
+                # Only consider entries up to the current step index.
                 if clock > step_idx:
-                    continue  # skip future changes
+                    continue
 
-                parts = rest.strip().split()
-                if len(parts) == 2:
-                    reg, val = parts
-                    registers[reg] = val
+                # Split the remaining part by commas.
+                segments = rest.split(',')
+                for seg in segments:
+                    seg = seg.strip()
+                    if seg.startswith("PC="):
+                        # Extract the PC value
+                        pc_str = seg.split('=', 1)[1].strip()
+                        highlight_pc_int = int(pc_str, 16)
+                    else:
+                        # For register updates, split on '='.
+                        parts = seg.split('=', 1)
+                        if len(parts) == 2:
+                            reg = parts[0].strip()
+                            val = parts[1].strip()
+                            registers[reg] = val
             except Exception as e:
-                continue  # ignore bad lines
+                continue
 
-    return registers
+    return registers, highlight_pc_int
+
+
+# def parse_register_log(filename, step_idx):
+#     """
+#     Parses the register_log.mc file and returns a tuple:
+#       (registers, current_pc)
+#     Expected log line example:
+#       00000001: PC=0x00000004, x5 = 0x10000000
+#     """
+#     registers = get_default_registers()
+#     current_pc = None
+
+#     if not os.path.exists(filename):
+#         return registers, current_pc
+
+#     with open(filename, 'r') as f:
+#         for line in f:
+#             line = line.strip()
+#             if not line or ':' not in line:
+#                 continue
+
+#             try:
+#                 # Split the timestamp and the rest of the line
+#                 timestamp_part, rest = line.split(":", 1)
+#                 clock = int(timestamp_part.strip(), 16)
+
+#                 # Only consider log entries up to the current step index
+#                 if clock > step_idx:
+#                     continue
+
+#                 # Each segment is comma-separated
+#                 segments = rest.split(',')
+#                 for seg in segments:
+#                     seg = seg.strip()
+#                     if seg.startswith("PC="):
+#                         # Extract PC using '=' as the delimiter
+#                         parts = seg.split('=', 1)
+#                         if len(parts) == 2:
+#                             # Normalize to lower-case for consistent comparison
+#                             current_pc = parts[1].strip().lower()
+#                     else:
+#                         # Handle register update; split by '=' instead of spaces
+#                         parts = seg.split('=', 1)
+#                         if len(parts) == 2:
+#                             reg = parts[0].strip()
+#                             val = parts[1].strip()
+#                             registers[reg] = val
+#             except Exception as e:
+#                 # Skip any lines that cause an exception during parsing
+#                 continue
+
+#     return registers, current_pc
 
 
 def parse_memory_log(filename, step_idx):

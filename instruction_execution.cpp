@@ -454,7 +454,9 @@ string writeBack() {
             ss << "x" << rd << " updated to 0x" << toHex(sim.RM);
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": x" << rd << "  0x" << toHex(sim.RM);
+                event << toHex(sim.clock)
+                    << ": PC=0x" << toHex(sim.PC)
+                    << ", x" << rd << " = 0x" << toHex(sim.RM);
                 regChangeLog.push_back(event.str());
             }
         } else {
@@ -467,8 +469,10 @@ string writeBack() {
             ss << "x" << rd << " updated to 0x" << toHex(sim.RM) << " (loaded)";
             {
                 stringstream event;
-                event << toHex(sim.clock) << ": x" << rd << "  0x" << toHex(sim.RM);
-                regChangeLog.push_back(event.str());
+                        event << toHex(sim.clock)
+                        << ": PC=0x" << toHex(sim.PC)
+                        << ", x" << rd << " = 0x" << toHex(sim.RM);
+                        regChangeLog.push_back(event.str());
             }
         }
     }

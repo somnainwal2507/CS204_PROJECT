@@ -102,15 +102,15 @@
           <th>Original Code</th>
         </tr>
       </thead>
+				{% for i, instr in instructions|enumerate %}
+					<tr {% if highlight_pc_int is defined and instr.pc_int == highlight_pc_int %} class="highlight" {% endif %}>
+						<td>{{ i }}</td>
+						<td>{{ instr.pc }}</td>
+						<td>{{ instr.machine_code }}</td>
+						<td>{{ instr.original_code }}</td>
+					</tr>
+				{% endfor %}
       <tbody>
-        {% for i, instr in instructions|enumerate %}
-        <tr {% if i == step_index %} class="highlight" {% endif %}>
-          <td>{{ i }}</td>
-          <td>{{ instr.pc }}</td>
-          <td>{{ instr.machine_code }}</td>
-          <td>{{ instr.original_code }}</td>
-        </tr>
-        {% endfor %}
       </tbody>
     </table>
 
