@@ -81,15 +81,20 @@ def simulator():
             registers = get_default_registers()
             raw_memory_dict = get_default_memory_dict()  # e.g. {addr_int: byte_int}
 
-        elif action == 'assemble':
-            if os.path.exists('input.asm'):
-                subprocess.run(['./main'])
-                subprocess.run(['./instruction_execution'])
-            session['step_index'] = 0
-            registers = get_default_registers()
-            # Let’s say data_seg is a list of (addr_str, val_str),
-            # we can convert that to a dict { addr_int : val_int } if needed
-            raw_memory_dict = data_seg
+        # elif action == 'assemble':
+        #     # Get code from editor and write to input.asm
+        #     code = request.form.get('code', '')
+        #     with open('input.asm', 'w') as f:
+        #         f.write(code)
+
+        #     if os.path.exists('input.asm'):
+        #         subprocess.run(['./main'])
+        #         subprocess.run(['./instruction_execution'])
+        #     session['step_index'] = 0
+        #     registers = get_default_registers()
+        #     # Let’s say data_seg is a list of (addr_str, val_str),
+        #     # we can convert that to a dict { addr_int : val_int } if needed
+        #     raw_memory_dict = data_seg
         else:
             # No recognized action
             registers = get_default_registers()
@@ -132,13 +137,19 @@ def simulator():
 
     # 6) Get the current step index for highlighting instructions
     current_step = session['step_index']
+
+    code = ''
+    if os.path.exists('input.asm'):
+        with open('input.asm', 'r') as f:
+            code = f.read()
     return render_template(
         'simulator.html',
         instructions=instructions,
         registers=registers,
         memory=memory_chunked,
         step_index=current_step,
-        jump_addr=jump_addr
+        jump_addr=jump_addr,
+        code=code
     )
 
 

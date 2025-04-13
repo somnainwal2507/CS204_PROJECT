@@ -78,8 +78,10 @@
   <div class="container">
     <h1>Simulator</h1>
     <form method="POST" action="">
+      <!-- Hidden field carrying the code from the editor -->
+      <textarea name="code" hidden>{{ code|e }}</textarea>
       <!-- The usual simulator actions -->
-      <button type="submit" name="action" value="assemble" class="btn btn-primary">Assemble</button>
+      <!-- <button type="submit" name="action" value="assemble" class="btn btn-primary">Assemble</button> -->
       <button type="submit" name="action" value="reset" class="btn btn-danger">Reset</button>
       <button type="submit" name="action" value="step" class="btn btn-warning">Step</button>
       <button type="submit" name="action" value="run" class="btn btn-success">Run</button>

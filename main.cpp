@@ -3,8 +3,8 @@
 using namespace std;
 #define ll long long int
 
-int data = 0x10000000;
-int dataAddress = data;
+int myData = 0x10000000;
+int dataAddress = myData;
 int pc = 0;
 
 static string toBinaryStr(unsigned value, int width) {
@@ -501,7 +501,7 @@ int main() {
                                 while(tokens.size()>3) tokens.pop_back();
                             }
                             if(tokens.size()>=3 && varmap.find(tokens[2]) != varmap.end()) {
-                                int num = data >> 12;
+                                int num = myData >> 12;
                                 vector<string> tempInstr = {"auipc", tokens[1], to_string(num)};
                                 string mc2   = Uformat(tempInstr);
                                 string bits2 = UbitString(tempInstr);
