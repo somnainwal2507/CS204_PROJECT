@@ -2,20 +2,26 @@
 {% block title %}RISC-V Editor{% endblock %}
 {% block content %}
 <style>
-  /* Style for the RISC-V code text area */
+  /* Custom styling for the RISC-V assembly code text area */
   #code {
-    background-color: #2d2d2d; /* dark gray background */
-    color: #ffffe0;            /* light yellow text */
+    background-color: #2d2d2d; /* Dark gray background */
+    color: #ffffe0;            /* Light yellow text */
+    border: 1px solid #444;
+    border-radius: 5px;
+    font-family: monospace;
+    padding: 10px;
+    min-height: 600px;         /* Ensures the textarea is tall enough */
   }
 </style>
 
-<h1>Editor</h1>
 <form method="POST" action="{{ url_for('editor') }}">
   <div class="mb-3">
     <label for="code" class="form-label">RISC-V Assembly Code</label>
-    <textarea id="code" name="code" rows="12" class="form-control">{{ code }}</textarea>
+    <textarea id="code" name="code" rows="18" class="form-control" placeholder="Enter your RISC-V code here...">{{ code }}</textarea>
   </div>
-  <button type="submit" class="btn btn-primary">Simulate</button>
+  <div class="text-center">
+    <button type="submit" class="btn btn-primary px-4 py-2">Simulate</button>
+  </div>
 </form>
 {% endblock %}
 
