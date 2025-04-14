@@ -27,3 +27,7 @@ beq x0 x0 GCD
 
 
 EXIT:
+sw x31 12(x5)
+lw x31 12(x5)
+addi x31 x31 5
+sw x31 12(x5)

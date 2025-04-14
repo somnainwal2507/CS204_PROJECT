@@ -326,4 +326,93 @@ Step 5 => Write back:
 
 =============================== 
 
-No instruction found at PC = 0x00000024. Halting.
+## Clock cycle: 00000010 ##
+
+Step 1 => Fetch:
+    PC: 0x00000024  |  Fetched IR: 0x01F2A623
+
+Step 2 => Decode:
+    Instruction (IR): 0x01F2A623
+    Opcode: 0x00000023
+    Type: S-Type
+    rs1: x5    rs2: x31
+    funct3: 0x00000002    Immediate: 0x0000000C
+
+Step 3 => Execute:
+    Store Effective Address: 0x10000000 + 0x0000000C = 0x1000000C
+
+Step 4 => Memory Access:
+    sw store 0x00000005 to addresses starting at 0x1000000C
+
+Step 5 => Write back:
+
+=============================== 
+
+## Clock cycle: 00000011 ##
+
+Step 1 => Fetch:
+    PC: 0x00000028  |  Fetched IR: 0x00C2AF83
+
+Step 2 => Decode:
+    Instruction (IR): 0x00C2AF83
+    Opcode: 0x00000003
+    Type: I-Type
+    rd: x31    rs1: x5
+    funct3: 0x00000002    Immediate: 0x0000000C
+
+Step 3 => Execute:
+    Load Effective Address: 0x10000000 + 0x0000000C = 0x1000000C
+
+Step 4 => Memory Access:
+    lw from address 0x1000000C => 0x00000005
+
+Step 5 => Write back:
+    x31 updated to 0x00000005 (loaded)
+
+=============================== 
+
+## Clock cycle: 00000012 ##
+
+Step 1 => Fetch:
+    PC: 0x0000002C  |  Fetched IR: 0x005F8F93
+
+Step 2 => Decode:
+    Instruction (IR): 0x005F8F93
+    Opcode: 0x00000013
+    Type: I-Type
+    rd: x31    rs1: x31
+    funct3: 0x00000000    Immediate: 0x00000005
+
+Step 3 => Execute:
+    addi: x31 = 0x00000005 + 0x00000005
+
+Step 4 => Memory Access:
+
+Step 5 => Write back:
+    x31 updated to 0x0000000A
+
+=============================== 
+
+## Clock cycle: 00000013 ##
+
+Step 1 => Fetch:
+    PC: 0x00000030  |  Fetched IR: 0x01F2A623
+
+Step 2 => Decode:
+    Instruction (IR): 0x01F2A623
+    Opcode: 0x00000023
+    Type: S-Type
+    rs1: x5    rs2: x31
+    funct3: 0x00000002    Immediate: 0x0000000C
+
+Step 3 => Execute:
+    Store Effective Address: 0x10000000 + 0x0000000C = 0x1000000C
+
+Step 4 => Memory Access:
+    sw store 0x0000000A to addresses starting at 0x1000000C
+
+Step 5 => Write back:
+
+=============================== 
+
+No instruction found at PC = 0x00000034. Halting.

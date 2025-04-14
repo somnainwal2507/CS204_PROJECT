@@ -28,8 +28,8 @@ def editor():
             f.write(code)
 
         # 3. Run your existing executables
-        subprocess.run(['./main'])
-        subprocess.run(['./instruction_execution'])
+        subprocess.run(['./main.exe'])
+        subprocess.run(['./instruction_execution.exe'])
 
         # 4. Reset step index and logs for fresh simulation
         session['step_index'] = 0
