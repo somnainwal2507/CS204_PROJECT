@@ -42,23 +42,25 @@ vector<string> regChangeLog;
 unordered_set<uint32_t> updatedMemoryAddresses;
 
 string toHex(uint32_t num) {
+		// Convert a number to a hexadecimal string with leading zeros.
     stringstream ss;
     ss << setw(8) << setfill('0') << hex << uppercase << num;
     return ss.str();
 }
 
-// Helper function to format a byte (two-digit hex)
 string toHexByte(uint8_t byte) {
+		// Convert a byte to a two-digit hexadecimal string.
     stringstream ss;
     ss << setw(2) << setfill('0') << hex << uppercase << static_cast<unsigned int>(byte);
     return ss.str();
 }
 
 void logMessage(const string &msg) {
+		// Log a message to the silmulator log file
     sim.log << msg << endl;
 }
 
-// Helper function to indent each line of a given string.
+// Helper function to indent each line of a given string. NOT NECESSARY
 string indent(const string &s) {
     stringstream input(s);
     stringstream output;
@@ -70,6 +72,7 @@ string indent(const string &s) {
 }
 
 string fetch() {
+		// Show the instruction fetched from memory.
     sim.IR = sim.instrMemory[sim.PC];
     stringstream ss;
     ss << "PC: 0x" << toHex(sim.PC) << "  |  Fetched IR: 0x" << toHex(sim.IR);
