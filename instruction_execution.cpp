@@ -568,7 +568,6 @@ int main() {
         if (line.empty())
             continue;
 
-        // Expected line format example:
         // 0x0 0x00800513 , addi x10,x0,8 # 0010011-000-NULL-01010-00000-NULL-000000001000
         size_t posHash = line.find("#");
         string comment;

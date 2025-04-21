@@ -1,0 +1,12 @@
+Total cycles: 20
+Total instructions: 8
+CPI: 2.50
+Data-transfer: 0
+ALU instructions: 5
+Control instructions:3
+Stalls/bubbles: 6
+Data hazards: 6
+Control hazards: 3
+Branch mispredictions: 2
+Stalls due to data hazards: 6
+Stalls due to control hazards: 0
