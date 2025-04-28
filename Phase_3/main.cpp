@@ -10,7 +10,6 @@
 #include <string>
 #include <iomanip>
 
-
 #include "text_memory.h"
 #include "data_memory.h"
 #include "register_file.h"
@@ -58,17 +57,9 @@ Knobs parseArgs(int argc, char** argv) {
     return k;
 }
 
-#include <iomanip>
-#include <vector>
-#include <string>
-#include <iostream>
 
-// ------------------------------------------------------------------
-// call this after your simulation loop, once you've populated:
-//   instrNames  : vector<string> of length N (e.g. "addi ra, x0, 1", ...)
-//   execTable   : vector<vector<char>> size N x CYCLES
-//   cycle       : total number of cycles (CYCLES)
-// ------------------------------------------------------------------
+
+
 void printExecutionTable(
     const vector<string>& instrNames,
     const vector<vector<char>>& execTable,
@@ -101,8 +92,7 @@ void printExecutionTable(
 int main(int argc, char** argv) {
     // 1) Parse knobs
     Knobs knobs = parseArgs(argc, argv);
-    
-    cerr << "[DEBUG] forwarding = " << (knobs.forwarding ? "ON\n" : "OFF\n");
+
     // 2) Instantiate & load memories
     TextMemory    imem;
     DataMemory    dmem;
@@ -110,8 +100,6 @@ int main(int argc, char** argv) {
         cerr << "ERROR: could not open output.mc\n";
         return 1;
     }
-    //print data memory contents
-    //dmem.dump(0x10000000, 0x10000000 + 0x100); // dump first 256 bytes
     // 3) Instantiate register file & branch predictor
     RegisterFile  regs;
     BranchPredictor bp;
@@ -152,18 +140,13 @@ int main(int argc, char** argv) {
     // 7) Pipelined simulation
     while (true) {
         bool exForwardedEq,exForwardedNEq;
+        //cout<<"[DEBUG...] cycle="<<cycle<<"\n";
         // Terminate when PC past end AND pipeline empty
         if (PC >= lastAddr &&
             !if_id.valid && !id_ex.valid && !ex_mem.valid && !mem_wb.valid)
             break;
 
         ++cycle;
-        // cout<<"[DEBUG] cycle="<<cycle<<"\n";
-        // cout<<"[DEBUG] PC="<<hex<<PC<<"\n";
-        // cout<<"[DEBUG] if_id.valid="<<if_id.valid<<"\n";
-        // cout<<"[DEBUG] id_ex.valid="<<id_ex.valid<<"\n";
-        // cout<<"[DEBUG] ex_mem.valid="<<ex_mem.valid<<"\n";
-        // cout<<"[DEBUG] mem_wb.valid="<<mem_wb.valid<<"\n";
 
         // Create next‐cycle copies
         IF_ID   next_if   = if_id;
@@ -175,7 +158,8 @@ int main(int argc, char** argv) {
 
         // ===== WB Stage =====
         if (mem_wb.valid) {
-            cout<<"[WB STAGE] "<<mem_wb.instr.asmStr<<endl;
+            //cout<<"[WB STAGE] "<<mem_wb.instr.asmStr<<endl;
+            //totalInsts++;
             int idx = mem_wb.pc / 4;
             execTable[idx][cycle-1] = 'W';
             instrNames[idx] = mem_wb.instr.asmStr;
@@ -189,7 +173,7 @@ int main(int argc, char** argv) {
 
         // ===== MEM Stage =====
 if (ex_mem.valid) {
-    cout<<"[MEM STAGE] "<<ex_mem.instr.asmStr<<endl;
+    //cout<<"[MEM STAGE] "<<ex_mem.instr.asmStr<<endl;
     int idx = ex_mem.pc / 4;
     execTable[idx][cycle-1] = 'M';
     instrNames[idx]         = ex_mem.instr.asmStr;
@@ -203,11 +187,6 @@ if (ex_mem.valid) {
 
     // extract the 3‑bit funct3 from the binary
     uint8_t funct3 = (ex_mem.instr.binary >> 12) & 0x7;
-    // cout<<"[DEBUG] funct3="<<int(funct3)<<"\n";
-    // cout<<"[DEBUG] ex_mem.memRead="<<ex_mem.memRead<<"\n";
-    // cout<<"[DEBUG] ex_mem.memWrite="<<ex_mem.memWrite<<"\n";
-    // cout<<"[DEBUG] ex_mem.instr.amstr="<<ex_mem.instr.asmStr<<"\n"; 
-    // cout<<"[DEBUG] ex_mem.aluResult="<<hex<<ex_mem.aluResult<<"\n";
     // ------- LOADs -------
     if (ex_mem.memRead) {
         uint32_t loaded;
@@ -274,136 +253,127 @@ else {
 }
 
 
-        // ===== EX Stage =====
-        if (id_ex.valid) {
-            cout<<"[EX STAGE] "<<id_ex.instr.asmStr<<endl;
-            int idx = id_ex.pc / 4;
-            execTable[idx][cycle-1] = 'X';
-            instrNames[idx] = id_ex.instr.asmStr;
-            
-            
-            // 3) Forwarding
-            ForwardingControl fc = { NO_FORWARD, NO_FORWARD };
-            if (knobs.forwarding) {
-                fc = getForwardingControls(id_ex, ex_mem, mem_wb);
-            }
+				// ===== EX Stage =====
+				if (id_ex.valid) {
+						//cout<<"[EX STAGE] "<<id_ex.instr.asmStr<<endl;
+						int idx = id_ex.pc / 4;
+						execTable[idx][cycle-1] = 'X';
+						instrNames[idx]         = id_ex.instr.asmStr;
 
-            auto getOp = [&](uint32_t origVal, ForwardingSource fs){
-                if (fs == FORWARD_FROM_EX_MEM) return ex_mem.aluResult;
-                if (fs == FORWARD_FROM_MEM_WB) {
-                    return mem_wb.memRead ? mem_wb.memData : mem_wb.aluResult;
-                }
-                return origVal;
-            };
+						// 3) Forwarding
+						ForwardingControl fc = { NO_FORWARD, NO_FORWARD };
+						if (knobs.forwarding) {
+								fc = getForwardingControls(id_ex, ex_mem, mem_wb);
+						}
 
-            uint32_t op1 = getOp(
-                id_ex.readData1, fc.forwardA
-            );
+						auto getOp = [&](uint32_t origVal, ForwardingSource fs) {
+								if (fs == FORWARD_FROM_EX_MEM)     return ex_mem.aluResult;
+								if (fs == FORWARD_FROM_MEM_WB) {
+										return mem_wb.memRead ? mem_wb.memData : mem_wb.aluResult;
+								}
+								return origVal;
+						};
 
-            uint32_t op2 = id_ex.aluSrc
-                ? static_cast<uint32_t>(id_ex.imm)
-                : id_ex.readData2;
+						uint32_t op1 = getOp(id_ex.readData1, fc.forwardA);
+						uint32_t op2 = id_ex.aluSrc
+													 ? static_cast<uint32_t>(id_ex.imm)
+													 : id_ex.readData2;
+						if (!id_ex.aluSrc) {
+								op2 = getOp(id_ex.readData2, fc.forwardB);
+						}
 
-            if (!id_ex.aluSrc) {
-                op2 = getOp(id_ex.readData2, fc.forwardB);
-            }
-            // 1) Branch evaluation
-            bool taken = false;
-            bool exForwardedEq = op1==op2;
-            bool exForwardedNEq = op1!=op2;
-            exForwardedOp1 = op1;
-            exForwardedOp2 = op2;
-            uint32_t targetPC = 0;
-            cout<<"[DEBUG] id_ex.branch="<<id_ex.branch<<"\n";
-            cout<<"[DEBUG] id_ex.readData1="<<hex<<id_ex.readData1<<"\n";
-            cout<<"[DEBUG] id_ex.readData2="<<hex<<id_ex.readData2<<"\n";
+						// 1) Branch evaluation
+						bool taken             = false;
+						bool exForwardedEq     = (op1 == op2);
+						bool exForwardedNEq    = (op1 != op2);
+						exForwardedOp1         = op1;
+						exForwardedOp2         = op2;
+						uint32_t targetPC      = 0;
 
+						if (id_ex.branch) {
+								taken    = evaluateBranch(
+										op1,
+										op2,
+										(id_ex.instr.binary >> 12) & 0x7
+								);
+								targetPC = id_ex.pc + id_ex.imm;
+						}
 
+						// 2) Prediction, update, and possibly flush
+						bool predTaken = bp.predict(id_ex.pc);
 
+						if (id_ex.branch) {
+								taken = evaluateBranch(op1, op2, (id_ex.instr.binary >> 12) & 0x7);
+								targetPC = id_ex.pc + id_ex.imm;
+								// teach the predictor the true outcome every time
+								bp.update(id_ex.pc, taken, targetPC);
 
-            if (id_ex.branch) {
-                taken = evaluateBranch(
-                    op1,
-                    op2,
-                    (id_ex.instr.binary >> 12) & 0x7
-                );
-                targetPC = id_ex.pc + id_ex.imm;
-            }
+								if (predTaken != taken) {
+										// mispredict → redirect & flush
+										++numMispredicts;
+										nextPC                  = taken ? targetPC : (id_ex.pc + 4);
+										next_if.valid           = false;
+										next_id.valid           = false;
+										next_ex.valid           = false;
+										++numControlHazards;
+										if (!knobs.pipeline) ++numStallsControl;
+										haltFetchThisCycle      = true;
+								} else {
+										// correct → normal EX
+										haltFetchThisCycle = false;
 
-            // 2) On a mispredict, we'll need to flush IF/ID & ID/EX
-            bool predTaken = bp.predict(id_ex.pc);
-            if (id_ex.branch && (predTaken != taken)) {
-                ++numMispredicts;
-                //cout<<"[DEBUG] mispredict\n";
-                // stall PC to the correct target next
-                nextPC = taken ? targetPC : (id_ex.pc + 4);
-                // flush IF/ID & ID/EX
-                next_if.valid = false;
-                next_id.valid = false;
-                ++numControlHazards;
-                if (!knobs.pipeline) ++numStallsControl;
-                haltFetchThisCycle = true;
-            }else{
-                haltFetchThisCycle = false;
-            }
+										uint32_t aluOut = executeALU(
+												op1, op2,
+												id_ex.opcode,
+												(id_ex.instr.binary >> 12) & 0x7,
+												(id_ex.instr.binary >> 25) & 0x7F
+										);
 
-            // // 3) Forwarding
-            // ForwardingControl fc = { NO_FORWARD, NO_FORWARD };
-            // if (knobs.forwarding) {
-            //     fc = getForwardingControls(id_ex, ex_mem, mem_wb);
-            // }
+										next_ex.valid        = true;
+										next_ex.pc           = id_ex.pc;
+										next_ex.instr        = id_ex.instr;
+										next_ex.aluResult    = aluOut;
+										next_ex.writeData    = op2;
+										next_ex.rd           = id_ex.rd;
+										next_ex.regWrite     = id_ex.regWrite;
+										next_ex.memRead      = id_ex.memRead;
+										next_ex.memWrite     = id_ex.memWrite;
+										next_ex.branch       = id_ex.branch;
+										next_ex.imm          = id_ex.imm;
+										next_ex.branchTarget = targetPC;
+								}
+						} else {
+								// not a branch → always normal EX
+								haltFetchThisCycle = false;
 
-            // auto getOp = [&](uint32_t origVal, ForwardingSource fs){
-            //     if (fs == FORWARD_FROM_EX_MEM) return ex_mem.aluResult;
-            //     if (fs == FORWARD_FROM_MEM_WB) {
-            //         return mem_wb.memRead ? mem_wb.memData : mem_wb.aluResult;
-            //     }
-            //     return origVal;
-            // };
+								uint32_t aluOut = executeALU(
+										op1, op2,
+										id_ex.opcode,
+										(id_ex.instr.binary >> 12) & 0x7,
+										(id_ex.instr.binary >> 25) & 0x7F
+								);
 
-            // uint32_t op1 = getOp(
-            //     id_ex.readData1, fc.forwardA
-            // );
-
-            // uint32_t op2 = id_ex.aluSrc
-            //     ? static_cast<uint32_t>(id_ex.imm)
-            //     : id_ex.readData2;
-
-            // if (!id_ex.aluSrc) {
-            //     op2 = getOp(id_ex.readData2, fc.forwardB);
-            // }
-            // cout<<"[DEBUG] op1="<<hex<<op1<<"\n";
-            // cout<<"[DEBUG] op2="<<hex<<op2<<"\n";
-            // 4) ALU
-            uint32_t aluOut = executeALU(
-                op1, op2,
-                id_ex.opcode,
-                (id_ex.instr.binary >> 12) & 0x7,
-                (id_ex.instr.binary >> 25) & 0x7F
-            );
-            //cout<<"[ALU_DEBUG] aluOut="<<hex<<aluOut<<"\n";
-            // 5) Fill EX/MEM
-            next_ex.valid     = true;
-            next_ex.pc        = id_ex.pc;
-            next_ex.instr     = id_ex.instr;
-            next_ex.aluResult = aluOut;
-            next_ex.writeData = op2;
-            next_ex.rd        = id_ex.rd;
-            next_ex.regWrite  = id_ex.regWrite;
-            next_ex.memRead   = id_ex.memRead;
-            next_ex.memWrite  = id_ex.memWrite;
-            next_ex.branch    = id_ex.branch;
-            // Stats by opcode class
-            if      (id_ex.memRead||id_ex.memWrite) ++numLoads;
-            else if (id_ex.branch)                  ++numControl;
-            else                                    ++numALU;
-        } else {
-            next_ex.valid = false;
-        }
+								next_ex.valid        = true;
+								next_ex.pc           = id_ex.pc;
+								next_ex.instr        = id_ex.instr;
+								next_ex.aluResult    = aluOut;
+								next_ex.writeData    = op2;
+								next_ex.rd           = id_ex.rd;
+								next_ex.regWrite     = id_ex.regWrite;
+								next_ex.memRead      = id_ex.memRead;
+								next_ex.memWrite     = id_ex.memWrite;
+								next_ex.branch       = id_ex.branch;
+								next_ex.imm          = id_ex.imm;
+								next_ex.branchTarget = targetPC;
+						}
+				} else {
+						// bubble
+						next_ex.valid = false;
+				}
 
         // ===== ID Stage =====
-        if (if_id.valid) {
-            cout<<"[ID STAGE] "<<if_id.instr.asmStr<<endl;
+        if (!haltFetchThisCycle && if_id.valid) {
+            //cout<<"[ID STAGE] "<<if_id.instr.asmStr<<endl;
             // 1) Decode control
             int idx = if_id.pc / 4;
             execTable[idx][cycle-1] = 'D';
@@ -521,19 +491,12 @@ else {
             candidate.branch   = ctrl.branch;
             candidate.aluSrc   = ctrl.aluSrc;
 
-            //print rs1, rs2, rd, imm
-            // cout<<"[DEBUG] rs1="<<int(candidate.rs1)<<"\n";
-            // cout<<"[DEBUG] rs2="<<int(candidate.rs2)<<"\n";
-            // cout<<"[DEBUG] rd="<<int(candidate.rd)<<"\n";
-            // cout<<"[DEBUG] imm="<<hex<<candidate.imm<<"\n";
-
             // 3) Read register file
             candidate.readData1 = regs.read(candidate.rs1);
             candidate.readData2 = regs.read(candidate.rs2);
 
 
         bool stall = shouldStallIDStage(candidate, next_ex, next_mem, knobs.forwarding);
-        //cout<<"[DEBUG] stall="<<stall<<"\n";
             if (stall) {
             // inject a single-cycle bubble:
             doStall       = true;
@@ -555,7 +518,7 @@ else {
 
         // ===== IF Stage =====
         if (!doStall && !haltFetchThisCycle && PC < lastAddr) {
-            cout<<"[IF STAGE] "<<imem.fetch(PC).asmStr<<endl;
+            //cout<<"[IF STAGE] "<<if_id.instr.asmStr<<endl;
             int idx = PC / 4;
             execTable[idx][cycle-1] = 'F';
             instrNames[idx] =  imem.fetch(PC).asmStr;
@@ -566,16 +529,6 @@ else {
             next_if.valid = true;
             next_if.pc    = PC;
             next_if.instr = fetched;
-
-            // 2) Advance PC (tentatively)
-            // PC += 4;
-            // if (take) {
-            //     // We’ll correct it in EX when the branch gets resolved
-            //     nextPC = PC + ((fetched.binary >> 20) << 1);
-            //     ++numControlHazards;
-            // } else {
-            //     nextPC = PC;
-            // }
 
             PC += 4;
             nextPC = take ? targ : PC;
@@ -591,33 +544,12 @@ else {
         ex_mem  = next_ex;
         mem_wb  = next_mem;
         PC      = nextPC;
-        // cout<<"[DEBUG...] cycle="<<cycle<<"\n";
-        // cout<<"[DEBUG...] PC="<<hex<<PC<<"\n";
-        // cout<<"[DEBUG...] if_id.valid="<<if_id.valid<<"\n";
-        // cout<<"[DEBUG...] id_ex.valid="<<id_ex.valid<<"\n";
-        // cout<<"[DEBUG...] ex_mem.valid="<<ex_mem.valid<<"\n";
-        // cout<<"[DEBUG...] mem_wb.valid="<<mem_wb.valid<<"\n";
 
-        // cout<<"[D]"<<id_ex.valid<<"\n";
-        // cout<<"[D]"<<id_ex.branch<<"\n";
-
-        // ===== Update BP state AFTER EX stage resolves branch =====
-        // if (id_ex.valid && id_ex.branch) {
-        //     bool actual = evaluateBranch(
-        //         id_ex.readData1,
-        //         id_ex.readData2,
-        //         (id_ex.instr.binary >> 12) & 0x7
-        //     );
-        //     bp.update(id_ex.pc, actual, id_ex.pc + id_ex.imm);
-        //     // if (actual != id_ex.branch) {
-        //     //     ++numMispredicts;
-        //     // }
+        // if(ex_mem.valid && ex_mem.branch){
+        //     bool actual = ((ex_mem.instr.binary >> 12)& 0x7) == 0 ? exForwardedEq : ((ex_mem.instr.binary >> 12)& 0x7) == 1 ? exForwardedNEq 
+        //     : evaluateBranch(exForwardedOp1, exForwardedOp2, (ex_mem.instr.binary >> 12) & 0x7);
+        //     bp.update(ex_mem.pc, actual,  ex_mem.branchTarget);
         // }
-        if(ex_mem.valid && ex_mem.branch){
-            bool actual = ((ex_mem.instr.binary >> 12)& 0x7) == 0 ? exForwardedEq : ((ex_mem.instr.binary >> 12)& 0x7) == 1 ? exForwardedNEq 
-            : evaluateBranch(exForwardedOp1, exForwardedOp2, (ex_mem.instr.binary >> 12) & 0x7);
-            bp.update(ex_mem.pc, actual, ex_mem.pc + id_ex.imm);
-        }
         // ===== Tracing =====
         if (knobs.traceRegs) {
             regs.dump();
@@ -629,8 +561,14 @@ else {
                       << " EX/MEM: " << (ex_mem.valid ? ex_mem.instr.asmStr : "----") << "\n"
                       << " MEM/WB: " << (mem_wb.valid ? mem_wb.instr.asmStr : "----") << "\n";
         }
-        if (knobs.traceInst && id_ex.valid && (int)(id_ex.pc/4) == knobs.traceInstIdx) {
+        if (knobs.traceInst && if_id.valid && (int)(if_id.pc/4) == knobs.traceInstIdx) {
+            cout << "[Trace Inst " << knobs.traceInstIdx << "] in IF/ID at cycle " << cycle << "\n";
+        }else if (knobs.traceInst && id_ex.valid && (int)(id_ex.pc/4) == knobs.traceInstIdx) {
             cout << "[Trace Inst " << knobs.traceInstIdx << "] in ID/EX at cycle " << cycle << "\n";
+        }else if (knobs.traceInst && ex_mem.valid && (int)(ex_mem.pc/4) == knobs.traceInstIdx) {
+            cout << "[Trace Inst " << knobs.traceInstIdx << "] in EX/MEM at cycle " << cycle << "\n";
+        }else if (knobs.traceInst && mem_wb.valid && (int)(mem_wb.pc/4) == knobs.traceInstIdx) {
+            cout << "[Trace Inst " << knobs.traceInstIdx << "] in MEM/WB at cycle " << cycle << "\n";
         }
         if (knobs.traceBP) {
             bp.printState();
@@ -658,4 +596,5 @@ else {
 
     return 0;
 }
+
 

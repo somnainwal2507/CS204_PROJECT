@@ -1,6 +1,7 @@
-.text
-addi  x1, x0, 2 
-loop:
-    addi  x1, x1, -1   
-    bne   x1, x0, loop   
-    addi  x2, x0, 1
+addi x7 x0 2
+lui x5 0x10000
+
+sw x7 0(x5)
+lw x4 0(x5)
+addi x4 x0 5
+

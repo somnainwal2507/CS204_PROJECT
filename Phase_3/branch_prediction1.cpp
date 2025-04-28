@@ -34,7 +34,7 @@ void BranchPredictor::printState() const {
         bool     bit = e.second;
         uint32_t tgt = getTarget(pc);
         std::cout << "  PC=0x" << std::hex << pc
-                  << std::dec << " → "
+                  << std::dec << " - "
                   << (bit ? "TAKEN" : "NOT-TAKEN")
                   << ", target=0x" << std::hex << tgt
                   << std::dec << "\n";

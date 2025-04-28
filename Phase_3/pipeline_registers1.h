@@ -52,13 +52,14 @@ struct EX_MEM {
     uint32_t    aluResult;
     uint32_t    writeData;  // for stores
     uint8_t     rd;
+    int32_t     imm;           // the same immediate that ID/EX had
+    uint32_t    branchTarget;
 
     // control signals
     bool        regWrite;
     bool        memRead;
     bool        memWrite;
     bool        branch;
-
     bool        valid;
 };
 

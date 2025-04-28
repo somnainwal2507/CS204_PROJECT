@@ -4,6 +4,10 @@
 
 RegisterFile::RegisterFile() {
     regs.fill(0);
+    regs[2]=0x7FFFFFDC; // stack pointer
+    regs[3]=0x10000000; // frame pointer
+    regs[10]=0x00000001;
+    regs[11]=0x7FFFFFDC;
 }
 
 uint32_t RegisterFile::read(uint8_t reg) const {

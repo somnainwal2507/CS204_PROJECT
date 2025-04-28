@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulation Results</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h1>Simulation Results</h1>
+
+  {% if error %}
+    <h2 style="color:red">❌ Simulation failed</h2>
+    {% if trace_regs %}
+      <h3>Register File Dump (raw)</h3>
+      <pre>{{ reg_cycles_logs|join('\n\n') }}</pre>
+    {% endif %}
+    {% if trace_pipe %}
+      <h3>Pipeline Registers (raw)</h3>
+      <pre>{{ pipe_cycles_logs|join('\n\n') }}</pre>
+    {% endif %}
+    {% if trace_bp %}
+      <h3>Branch Predictor State (raw)</h3>
+      <pre>{{ bp_cycles_logs|join('\n\n') }}</pre>
+    {% endif %}
+  {% else %}
+    <!-- Statistics -->
+    <h2>Statistics</h2>
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      {% for m, v in stats.items() %}
+        <tr><td>{{ m }}</td><td>{{ v }}</td></tr>
+      {% endfor %}
+    </table>
+
+    <!-- Execution Table -->
+    <h2>Execution Table</h2>
+    <table class="exec-table">
+      <tr>
+        <th>Instruction</th>
+        {% for c in cycles %}<th>{{ c }}</th>{% endfor %}
+      </tr>
+      {% for row in instr_rows %}
+        <tr>
+          <td>{{ row.name }}</td>
+          {% for s in row.stages %}
+            <td class="stage-{{ s }}">{{ s }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </table>
+
+    <!-- Register File Viewer -->
+    {% if trace_regs %}
+      <h2>Register File by Cycle</h2>
+      <div>
+        <button id="reg-prev">Prev</button>
+        <span id="reg-num"></span>
+        <button id="reg-next">Next</button>
+      </div>
+      <pre id="reg-log" style="border:1px solid #ccc; padding:10px;"></pre>
+    {% endif %}
+
+    <!-- Pipeline Register Viewer -->
+    {% if trace_pipe %}
+      <h2>Pipeline Registers by Cycle</h2>
+      <div>
+        <button id="pipe-prev">Prev</button>
+        <span id="pipe-num"></span>
+        <button id="pipe-next">Next</button>
+      </div>
+      <pre id="pipe-log" style="border:1px solid #ccc; padding:10px;"></pre>
+    {% endif %}
+
+    <!-- Branch Predictor Viewer -->
+    {% if trace_bp %}
+      <h2>Branch Predictor State by Cycle</h2>
+      <div>
+        <button id="bp-prev">Prev</button>
+        <span id="bp-num"></span>
+        <button id="bp-next">Next</button>
+      </div>
+      <pre id="bp-log" style="border:1px solid #ccc; padding:10px;"></pre>
+    {% endif %}
+
+    <script>
+      {% if trace_regs %}
+        const regLogs = {{ reg_cycles_logs|tojson }};
+        let regIdx = 0;
+        const regNum = document.getElementById('reg-num');
+        const regBox = document.getElementById('reg-log');
+        function updateReg() {
+          regNum.textContent = `Cycle ${regIdx+1} / ${regLogs.length}`;
+          regBox.textContent = regLogs[regIdx].join('\n');
+        }
+        document.getElementById('reg-prev').onclick = () => { if(regIdx>0) regIdx--; updateReg(); };
+        document.getElementById('reg-next').onclick = () => { if(regIdx<regLogs.length-1) regIdx++; updateReg(); };
+        if(regLogs.length) updateReg(); else regBox.textContent='No register logs.';
+      {% endif %}
+
+      {% if trace_pipe %}
+        const pipeLogs = {{ pipe_cycles_logs|tojson }};
+        let pipeIdx = 0;
+        const pipeNum = document.getElementById('pipe-num');
+        const pipeBox = document.getElementById('pipe-log');
+        function updatePipe() {
+          pipeNum.textContent = `Cycle ${pipeIdx+1} / ${pipeLogs.length}`;
+          pipeBox.textContent = pipeLogs[pipeIdx].join('\n');
+        }
+        document.getElementById('pipe-prev').onclick = () => { if(pipeIdx>0) pipeIdx--; updatePipe(); };
+        document.getElementById('pipe-next').onclick = () => { if(pipeIdx<pipeLogs.length-1) pipeIdx++; updatePipe(); };
+        if(pipeLogs.length) updatePipe(); else pipeBox.textContent='No pipeline logs.';
+      {% endif %}
+
+      {% if trace_bp %}
+        const bpLogs = {{ bp_cycles_logs|tojson }};
+        let bpIdx = 0;
+        const bpNum = document.getElementById('bp-num');
+        const bpBox = document.getElementById('bp-log');
+        function updateBP() {
+          bpNum.textContent = `Cycle ${bpIdx+1} / ${bpLogs.length}`;
+          bpBox.textContent = bpLogs[bpIdx].join('\n');
+        }
+        document.getElementById('bp-prev').onclick = () => { if(bpIdx>0) bpIdx--; updateBP(); };
+        document.getElementById('bp-next').onclick = () => { if(bpIdx<bpLogs.length-1) bpIdx++; updateBP(); };
+        if(bpLogs.length) updateBP(); else bpBox.textContent='No BP logs.';
+      {% endif %}
+    </script>
+  {% endif %}
+</body>
+</html>

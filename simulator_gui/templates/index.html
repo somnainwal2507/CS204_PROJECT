@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RISC-V Pipeline Simulator + Assembler</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    textarea { width: 100%; height: 300px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>RISC-V Pipeline Simulator + Assembler</h1>
+
+  <form method="post">
+    <label for="asm_code">Assembly Code:</label><br>
+    <textarea id="asm_code" name="asm_code" placeholder="Type your RISC-V assembly here..."></textarea>
+    <br><br>
+
+    <!-- Knobs -->
+    <label><input type="checkbox" name="pipeline" checked> Enable pipelining</label><br>
+    <label><input type="checkbox" name="forwarding" checked> Enable data forwarding</label><br>
+    <label><input type="checkbox" name="trace_regs"> Print register file each cycle</label><br>
+    <label><input type="checkbox" name="trace_pipe"> Print pipeline registers each cycle</label><br>
+    <label><input type="checkbox" name="trace_bp"> Print branch predictor details</label><br>
+    <label>
+      <input type="checkbox" name="trace_inst"> Trace instruction index:
+      <input type="number" name="trace_inst_idx" min="0" placeholder="e.g. 10">
+    </label><br><br>
+
+    <button type="submit">Run Simulation</button>
+  </form>
+</body>
+</html>

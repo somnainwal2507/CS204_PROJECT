@@ -1,604 +1,574 @@
-#include <bits/stdc++.h>
-#include "format.cpp"    // Your existing Rformat, Iformat, Sformat, etc.
+//main.cpp
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <cstdint>
+#include <iomanip>
+#include <vector>
+#include <string>
+#include <iomanip>
+
+#include "text_memory.h"
+#include "data_memory.h"
+#include "register_file.h"
+#include "control_path.h"
+#include "datapath.h"
+#include "branch_prediction1.h"
+#include "hazard_detection1.h"
+#include "pipeline_registers1.h"
+
 using namespace std;
-#define ll long long int
+// Knobs
+struct Knobs {
+    bool pipeline      = true;   // Knob1
+    bool forwarding    = true;   // Knob2
+    bool traceRegs     = false;  // Knob3
+    bool tracePipe     = false;  // Knob4
+    bool traceInst     = false;  // Knob5
+    int  traceInstIdx  = -1;
+    bool traceBP       = false;  // Knob6
+};
 
-int myData = 0x10000000;
-int dataAddress = myData;
-int pc = 0;
+// Simple command‑line parser for our six knobs.
+Knobs parseArgs(int argc, char** argv) {
+    
 
-static string toBinaryStr(unsigned value, int width) {
-    bitset<32> bs(value);
-    string full = bs.to_string(); // 32 bits
-    return full.substr(32 - width, width);
-}
-
-// For R-type: <opcode(7)>-<func3(3)>-<func7(7)>-<rd(5)>-<rs1(5)>-<rs2(5)>-NULL
-string RbitString(const vector<string> &instr) {
-    string opcode_hex = codes_map[instr[0]][0];
-    string func3_hex  = codes_map[instr[0]][1];
-    string func7_hex  = codes_map[instr[0]][2];
-
-    int opcode = stoi(opcode_hex, nullptr, 16);
-    int func3  = stoi(func3_hex, nullptr, 16);
-    int func7  = stoi(func7_hex, nullptr, 16);
-
-    int rd  = stoi(instr[1].substr(1));
-    int rs1 = stoi(instr[2].substr(1));
-    int rs2 = stoi(instr[3].substr(1));
-
-    string opcode_bin = toBinaryStr(opcode, 7);
-    string func3_bin  = toBinaryStr(func3, 3);
-    string func7_bin  = toBinaryStr(func7, 7);
-    string rd_bin     = toBinaryStr(rd, 5);
-    string rs1_bin    = toBinaryStr(rs1, 5);
-    string rs2_bin    = toBinaryStr(rs2, 5);
-
-    ostringstream oss;
-    oss << opcode_bin << "-"
-        << func3_bin  << "-"
-        << func7_bin  << "-"
-        << rd_bin     << "-"
-        << rs1_bin    << "-"
-        << rs2_bin    << "-"
-        << "NULL";
-    return oss.str();
-}
-
-//Same for other types
-string IbitString(const vector<string> &instr) {
-    string opcode_hex = codes_map[instr[0]][0];
-    string func3_hex  = codes_map[instr[0]][1];
-    int opcode = stoi(opcode_hex, nullptr, 16);
-    int func3  = stoi(func3_hex, nullptr, 16);
-    int rd = stoi(instr[1].substr(1));
-    int rs1 = 0;
-    int imm_val = 0;  // immediate is 12-bit
-
-    // Adjust based on the number of tokens:
-    if (instr.size() == 3) {
-        // Load instruction like "lw x10,0(x6)"
-        size_t parenPos = instr[2].find('(');
-        if (parenPos == string::npos) {
-            throw std::invalid_argument("Invalid instruction format: missing '('");
-        } else {
-            string offsetStr = instr[2].substr(0, parenPos); // e.g. "0"
-            // Use parseImmediate to support char literals etc.
-            imm_val = static_cast<int>(parseImmediate(offsetStr));
-            size_t closePos = instr[2].find(')');
-            string regStr = instr[2].substr(parenPos+1, closePos - (parenPos+1)); // e.g. "x6"
-            rs1 = stoi(regStr.substr(1));
+    Knobs k;
+    for(int i = 1; i < argc; ++i) {
+        string a = argv[i];
+        if      (a == "--no-pipeline")    k.pipeline   = false;
+        else if (a == "--no-forward")     k.forwarding = false;
+        else if (a == "--trace-regs")     k.traceRegs  = true;
+        else if (a == "--trace-pipe")     k.tracePipe  = true;
+        else if (a == "--trace-inst" && i+1<argc) {
+            k.traceInst    = true;
+            k.traceInstIdx = stoi(argv[++i]);
         }
-    } else if (instr.size() >= 4) {
-        // For instructions like "addi x5 x10 -8" or "addi x5 x11 'a'"
-        size_t parenPos = instr[3].find('(');
-        if (parenPos == string::npos) {
-            rs1 = stoi(instr[2].substr(1));
-            // Here we use parseImmediate instead of stoi to handle char literals.
-            imm_val = static_cast<int>(parseImmediate(instr[3]));
-        } else {
-            string offsetStr = instr[3].substr(0, parenPos);
-            imm_val = static_cast<int>(parseImmediate(offsetStr));
-            size_t closePos = instr[3].find(')');
-            string regStr = instr[3].substr(parenPos+1, closePos - (parenPos+1));
-            rs1 = stoi(regStr.substr(1));
+        else if (a == "--trace-bp")       k.traceBP    = true;
+        else if (a == "--help") {
+            cout << "Usage: " << argv[0] << " [--no-pipeline] [--no-forward]\n"
+                      << "                  [--trace-regs] [--trace-pipe]\n"
+                      << "                  [--trace-inst <idx>] [--trace-bp]\n";
+            exit(0);
         }
     }
+    return k;
+}
 
-    // Check if the immediate is within the valid 12-bit range (-2048 to 2047)
-    if (imm_val < -2048 || imm_val > 2047) {
-        throw std::out_of_range("Immediate out of bounds");
+
+
+
+void printExecutionTable(
+    const vector<string>& instrNames,
+    const vector<vector<char>>& execTable,
+    int totalCycles)
+{
+    // Header row
+    cout << setw(15) << "Instruction";
+    for(int c = 1; c <= totalCycles; ++c) {
+        cout << setw(4) << c;
     }
-    
-    // Convert negative immediate to 2's complement 12-bit representation.
-    unsigned int imm_12;
-    if (imm_val < 0)
-        imm_12 = (1 << 12) + imm_val;
-    else
-        imm_12 = imm_val;
-    
-    string opcode_bin = toBinaryStr(opcode, 7);
-    string func3_bin  = toBinaryStr(func3, 3);
-    string rd_bin     = toBinaryStr(rd, 5);
-    string rs1_bin    = toBinaryStr(rs1, 5);
-    string imm_bin    = toBinaryStr(imm_12, 12);
-    
-    ostringstream oss;
-    oss << opcode_bin << "-"
-        << func3_bin  << "-"
-        << "NULL"     << "-"
-        << rd_bin     << "-"
-        << rs1_bin    << "-"
-        << "NULL"     << "-"
-        << imm_bin;
-    return oss.str();
-}
+    cout << "\n\n";
 
-string SbitString(const vector<string> &instr) {
-    string opcode_hex = codes_map[instr[0]][0];
-    string func3_hex  = codes_map[instr[0]][1];
-    int opcode = stoi(opcode_hex, nullptr, 16); 
-    int func3  = stoi(func3_hex, nullptr, 16);
+    // Each instruction row
+    for(size_t i = 0; i < instrNames.size(); ++i) {
+        // truncate or pad the instruction name to 15 chars
+        string name = instrNames[i];
+        if (name.size() > 15) name = name.substr(0, 15);
+        cout << setw(15) << name;
 
-    int rs2 = stoi(instr[1].substr(1));
-
-    size_t parenPos = instr[2].find('(');
-    size_t closePos = instr[2].find(')');
-    int imm_val = stoi(instr[2].substr(0, parenPos));
-    int rs1 = stoi(instr[2].substr(parenPos+2, closePos - (parenPos+2))); // skip 'x'
-
-    string opcode_bin = toBinaryStr(opcode, 7);
-    string func3_bin  = toBinaryStr(func3, 3);
-    string rs1_bin    = toBinaryStr(rs1, 5);
-    string rs2_bin    = toBinaryStr(rs2, 5);
-    unsigned imm_12 = static_cast<unsigned>(imm_val) & 0xFFF;
-    string imm_bin = toBinaryStr(imm_12, 12);
-
-    ostringstream oss;
-    oss << opcode_bin << "-"
-        << func3_bin  << "-"
-        << "NULL-NULL-"
-        << rs1_bin    << "-"
-        << rs2_bin    << "-"
-        << imm_bin;
-    return oss.str();
-}
-
-string SBbitString(const vector<string> &instr) {
-    string opcode_hex = codes_map[instr[0]][0];
-    string func3_hex  = codes_map[instr[0]][1];
-    int opcode = stoi(opcode_hex, nullptr, 16);
-    int func3  = stoi(func3_hex, nullptr, 16);
-
-    int rs1 = stoi(instr[1].substr(1));
-    int rs2 = stoi(instr[2].substr(1));
-    int imm_val = stoi(instr[3]); // simplified for illustration
-
-    string opcode_bin = toBinaryStr(opcode, 7);
-    string func3_bin  = toBinaryStr(func3, 3);
-    string rs1_bin    = toBinaryStr(rs1, 5);
-    string rs2_bin    = toBinaryStr(rs2, 5);
-    unsigned imm_12 = static_cast<unsigned>(imm_val) & 0xFFF;
-    string imm_bin = toBinaryStr(imm_12, 12);
-
-    ostringstream oss;
-    oss << opcode_bin << "-"
-        << func3_bin  << "-"
-        << "NULL-"
-        << rs1_bin    << "-"
-        << rs2_bin    << "-"
-        << "NULL-"
-        << imm_bin;
-    return oss.str();
-}
-
-string UbitString(const vector<string> &instr) {
-    string opcode_hex = codes_map[instr[0]][0];
-    int opcode = stoi(opcode_hex, nullptr, 16);
-    int rd = stoi(instr[1].substr(1));
-    int imm_val = stoi(instr[2]); // simplified (hex conversion may be needed)
-
-    string opcode_bin = toBinaryStr(opcode, 7);
-    string rd_bin     = toBinaryStr(rd, 5);
-    unsigned imm_20 = static_cast<unsigned>(imm_val) & 0xFFFFF;
-    string imm_bin = toBinaryStr(imm_20, 20);
-
-    ostringstream oss;
-    oss << opcode_bin << "-"
-        << "NULL-NULL-"
-        << rd_bin    << "-"
-        << "NULL-NULL-"
-        << imm_bin;
-    return oss.str();
-}
-
-string UJbitString(const vector<string> &instr) {
-    string opcode_hex = codes_map[instr[0]][0];
-    int opcode = stoi(opcode_hex, nullptr, 16);
-    int rd = stoi(instr[1].substr(1));
-    int imm_val = stoi(instr[2]);
-
-    string opcode_bin = toBinaryStr(opcode, 7);
-    string rd_bin     = toBinaryStr(rd, 5);
-    unsigned imm_20 = static_cast<unsigned>(imm_val) & 0xFFFFF;
-    string imm_bin = toBinaryStr(imm_20, 20);
-
-    ostringstream oss;
-    oss << opcode_bin << "-"
-        << "NULL-NULL-"
-        << rd_bin    << "-"
-        << "NULL-NULL-"
-        << imm_bin;
-    return oss.str();
-}
-
-
-
-int main() {
-    map<string,int> varmap;
-    map<int,int> dataSegment;
-    map<string,int> label;
-
-    ifstream inputFile("input.asm");
-    ofstream dataOutputFile("output.mc");
-    string line;
-    int flag = 0, comment = 0;
-
-    // Pass 1: parse .data
-    while (getline(inputFile, line))
-    {
-        if (line.empty()) continue;
-        stringstream ss(line);
-        vector<string> tokens;
-        string token, temp;
-        while (ss >> token) {
-            int f=0;
-            for(char c: token) {
-                if(c == '#') {
-                    if(!temp.empty() && !comment) {
-                        tokens.push_back(temp);
-                    }
-                    temp = "";
-                    comment = 1;
-                    break;
-                }
-                else if(c == ',') {
-                    if(f==1) temp+=c;
-                    else{    
-                        tokens.push_back(temp);
-                        temp = "";
-                    }
-                }
-                else {
-                    if(c=='\"') f=1;
-                    temp += c;
-                }     
-            }
-            if(!temp.empty() && !comment) {
-                tokens.push_back(temp);
-            }
-            temp = "";
-            if(comment) break;
+        // for each cycle, print the stage letter or blank
+        for(int c = 0; c < totalCycles; ++c) {
+            char stage = execTable[i][c];
+            cout << setw(4) << (stage ? stage : ' ');
         }
-        comment = 0;
-        if(tokens.empty()) continue;
+        cout << "\n";
+    }
+    cout << endl;
+}
 
-        if (tokens[0] == ".text") {
-            flag = 0;
+int main(int argc, char** argv) {
+    // 1) Parse knobs
+    Knobs knobs = parseArgs(argc, argv);
+
+    // 2) Instantiate & load memories
+    TextMemory    imem;
+    DataMemory    dmem;
+    if (!imem.loadFromFile("output.mc") || !dmem.loadFromFile("output.mc")) {
+        cerr << "ERROR: could not open output.mc\n";
+        return 1;
+    }
+    // 3) Instantiate register file & branch predictor
+    RegisterFile  regs;
+    BranchPredictor bp;
+
+    // 4) Initialize pipeline‐registers as empty
+    IF_ID   if_id   = {{0,""},0,false};
+    ID_EX   id_ex   = {0,{},0,0,0,0,0,0,0,0,false,false,false,false,false};
+    EX_MEM  ex_mem  = {0,{},0,0,0,false,false,false,false};
+    MEM_WB  mem_wb  = {0,{},0,0,0,false,false,false};
+
+    // 5) Stat counters
+    uint64_t cycle            = 0;
+    uint64_t totalInsts       = 0;
+    uint64_t numLoads         = 0;
+    uint64_t numALU           = 0;
+    uint64_t numControl       = 0;
+    uint64_t numStalls        = 0;
+    uint64_t numDataHazards   = 0;
+    uint64_t numControlHazards= 0;
+    uint64_t numMispredicts   = 0;
+    uint64_t numStallsData    = 0;
+    uint64_t numStallsControl = 0;
+
+    // 6) Program counter
+    uint32_t PC = 0;
+    uint32_t lastAddr = imem.size() * 4;
+    // one entry per instruction in text memory:
+    vector<string> instrNames(imem.size());
+// a table of N instructions × (maxCycles) cycles, initially zeroed:
+    vector<vector<char>> execTable(
+        imem.size(),
+        vector<char>(/* put an upper bound on cycles, or resize later */ 100000, 0)
+    );
+
+    uint32_t exForwardedOp1 = 0;
+    uint32_t exForwardedOp2 = 0;
+    bool haltFetchThisCycle = false;
+    // 7) Pipelined simulation
+    while (true) {
+        bool exForwardedEq,exForwardedNEq;
+        //cout<<"[DEBUG...] cycle="<<cycle<<"\n";
+        // Terminate when PC past end AND pipeline empty
+        if (PC >= lastAddr &&
+            !if_id.valid && !id_ex.valid && !ex_mem.valid && !mem_wb.valid)
             break;
-        } else if (tokens[0] == ".data") {
-            flag = 1;
-            continue;
-        }
-        // In .data section, process variables and directives.
-        if(flag) {
-            if(tokens[0][(tokens[0]).size()-1]==':'){
-                tokens[0].pop_back(); // remove ':' from label
-                if (tokens.size() > 1 && tokens[1][0] == '.') {
-                    if(datatype_map.find(tokens[1]) != datatype_map.end()) {
-                        varmap[tokens[0]] = dataAddress;
-                        int i = 2;
-                        while(i < (int)tokens.size()) {
-                            long long n;
-                            string s = tokens[i];
-                            int sizeBytes = datatype_map[tokens[1]];
-                            if(s.size() >= 2 && s[0]=='0' && (s[1]=='x' || s[1]=='X')) {
-                                if((s.size()-2)>sizeBytes*2){
-                                    cout<<"Data size is invalid"<<endl;
-                                    break;
-                                }
-                                n = stoll(s, nullptr, 16);
-                            } else {
-                                if(s.size() == 3 && s[0]=='\'' && s[2]=='\'') {
-                                    n = s[1];
-                                } else {
-                                    n = stoll(s);
-                                }
-                            }
-                            while(sizeBytes--) {
-                                dataSegment[dataAddress] = (n & 0xFF);
-                                n >>= 8;
-                                dataAddress++;
-                            }
-                            i++;
-                        }
-                    }
-                    else if(tokens[1] == ".asciiz") {
-                        if(tokens.size()>2){
-                            if(tokens[2][0]!='\"' || tokens[tokens.size()-1][(tokens[tokens.size()-1]).size()-1]!='\"') {
-                                dataOutputFile << "Error for " << tokens[0] << endl;
-                                break;
-                            }
-                            if(tokens[0][tokens[0].size()-1] == ':') tokens[0].pop_back();
-                            varmap[tokens[0]] = dataAddress;
-                            int i=2;
-                            while(i < (int)tokens.size()) {
-                                string s = tokens[i];
-                                for(char c : s) {    
-                                    if(c == '"') continue;
-                                    dataSegment[dataAddress++] = c;
-                                }
-                                if(i!=tokens.size()-1) dataSegment[dataAddress++] = ' ';
-                                i++;
-                            }  
-                            dataSegment[dataAddress++] = 0;  
-                        }
-                    }
-                }
-            }else{
-                if (tokens.size() >= 1 && tokens[0][0] == '.') {
-                    if(datatype_map.find(tokens[0]) != datatype_map.end()) {
-                        int i = 1;
-                        while(i < (int)tokens.size()) {
-                            long long n;
-                            string s = tokens[i];
-                            int sizeBytes = datatype_map[tokens[0]];
-                            if(s.size() >= 2 && s[0]=='0' && (s[1]=='x' || s[1]=='X')) {
-                                if((s.size()-2)>sizeBytes*2){
-                                    cout<<"Data size is invalid"<<endl;
-                                    break;
-                                }
-                                n = stoll(s, nullptr, 16);
-                            } else {
-                                if(s.size() == 3 && s[0]=='\'' && s[2]=='\'') {
-                                    n = s[1];
-                                } else {
-                                    n = stoll(s);
-                                }
-                            }
-                            while(sizeBytes--) {
-                                dataSegment[dataAddress] = (n & 0xFF);
-                                n >>= 8;
-                                dataAddress++;
-                            }
-                            i++;
-                        }
-                    }
-                    else if(tokens[0] == ".asciiz") {
-                        if(tokens.size()>1){
-                            if(tokens[1][0]!='\"' || tokens[tokens.size()-1][(tokens[tokens.size()-1]).size()-1]!='\"') {
-                                dataOutputFile << "Error for " << tokens[0] << endl;
-                                break;
-                            }
-                            int i=1;
-                            while(i < (int)tokens.size()) {
-                                string s = tokens[i];
-                                for(char c : s) {    
-                                    if(c == '"') continue;
-                                    dataSegment[dataAddress++] = c;
-                                }
-                                if(i!=tokens.size()-1) dataSegment[dataAddress++] = ' ';
-                                i++;
-                            }  
-                            dataSegment[dataAddress++] = 0;  
-                        }
-                    }
-                }
-            }
-        }
-    }
 
-    inputFile.clear();
-    inputFile.seekg(0, ios::beg);
-    flag = 0; comment = 0;
-    while(getline(inputFile, line)) {
-        if(line.empty()) continue;
-        stringstream ss(line);
-        vector<string> tokens;
-        string token;
-        while(ss >> token) {
-            if(token[0] == '#') break;
-            if(token == ".text") {
-                flag = 0;
-                break;
-            } else if(token == ".data") {
-                flag = 1;
-                break;
+        ++cycle;
+
+        // Create next‐cycle copies
+        IF_ID   next_if   = if_id;
+        ID_EX   next_id   = id_ex;
+        EX_MEM  next_ex   = ex_mem;
+        MEM_WB  next_mem   = mem_wb;
+        uint32_t nextPC   = PC;
+        bool doStall      = false;
+
+        // ===== WB Stage =====
+        if (mem_wb.valid) {
+            //cout<<"[WB STAGE] "<<mem_wb.instr.asmStr<<endl;
+            //totalInsts++;
+            int idx = mem_wb.pc / 4;
+            execTable[idx][cycle-1] = 'W';
+            instrNames[idx] = mem_wb.instr.asmStr;
+            if (mem_wb.regWrite) {
+                uint32_t val = mem_wb.memRead
+                             ? mem_wb.memData
+                             : mem_wb.aluResult;
+                regs.write(mem_wb.rd, val);
             }
-            int sz = token.size();
-            if(token[sz-1] == ':' && !flag) {
-                token.pop_back();
-                label[token] = pc;
-            }
-            else if(!flag) {
-                pc += 4;
-                if(token[0]=='l' && type_map.find(token) != type_map.end()) {
-                    ss >> token; 
-                    ss >> token; \
-                    if(varmap.find(token) != varmap.end()) {
-                        pc += 4;
-                    }
-                }
-            }
+        }
+
+        // ===== MEM Stage =====
+if (ex_mem.valid) {
+    //cout<<"[MEM STAGE] "<<ex_mem.instr.asmStr<<endl;
+    int idx = ex_mem.pc / 4;
+    execTable[idx][cycle-1] = 'M';
+    instrNames[idx]         = ex_mem.instr.asmStr;
+
+    next_mem.valid    = true;
+    next_mem.pc       = ex_mem.pc;
+    next_mem.instr    = ex_mem.instr;
+    next_mem.aluResult= ex_mem.aluResult;
+    next_mem.rd       = ex_mem.rd;
+    next_mem.regWrite = ex_mem.regWrite;
+
+    // extract the 3‑bit funct3 from the binary
+    uint8_t funct3 = (ex_mem.instr.binary >> 12) & 0x7;
+    // ------- LOADs -------
+    if (ex_mem.memRead) {
+        uint32_t loaded;
+        switch(funct3) {
+          case 0: { // LB
+            int8_t b = static_cast<int8_t>( dmem.readByte(ex_mem.aluResult) );
+            loaded  = static_cast<uint32_t>(b);       // sign‑extend
             break;
+          }
+          case 1: { // LH
+            int16_t h = static_cast<int16_t>(
+                          dmem.readHalfword(ex_mem.aluResult)
+                        );
+            loaded  = static_cast<uint32_t>(h);       // sign‑extend
+            break;
+          }
+          case 2:   // LW
+            loaded = dmem.readWord(ex_mem.aluResult);
+            break;
+          case 4:   // LBU
+            loaded = dmem.readByte(ex_mem.aluResult); // zero‑extend
+            break;
+          case 5:   // LHU
+            loaded = dmem.readHalfword(ex_mem.aluResult);// zero‑extend
+            break;
+          default:  // fallback to word
+            loaded = dmem.readWord(ex_mem.aluResult);
         }
+        next_mem.memRead = true;
+        next_mem.memData = loaded;
+    } else {
+        next_mem.memRead = false;
     }
 
-    // Pass 3: Generate machine code
-    inputFile.clear();
-    inputFile.seekg(0, ios::beg);
-    pc = 0; flag = 0; comment = 0;
-    while(getline(inputFile, line)) {
-        if(line.empty()) continue;
-        stringstream ss(line);
-        vector<string> tokens;
-        string token, temp;
-        while(ss >> token) {
-            for(char c: token) {
-                if(c == '#') {
-                    if(!temp.empty() && !comment) {
-                        tokens.push_back(temp);
-                    }
-                    temp = "";
-                    comment = 1;
+    // ------- STOREs -------
+    if (ex_mem.memWrite) {
+        switch(funct3) {
+          case 0: // SB
+            dmem.writeByte(
+              ex_mem.aluResult,
+              static_cast<uint8_t>(ex_mem.writeData & 0xFF)
+            );
+            break;
+          case 1: // SH
+            dmem.writeHalfword(
+              ex_mem.aluResult,
+              static_cast<uint16_t>(ex_mem.writeData & 0xFFFF)
+            );
+            break; 
+          case 2: // SW
+            dmem.writeWord(
+              ex_mem.aluResult,
+              ex_mem.writeData
+            );
+            break;
+          default:
+            // you could assert or treat as SW
+            dmem.writeWord(ex_mem.aluResult, ex_mem.writeData);
+        }
+    }
+}
+else {
+    next_mem.valid = false;
+}
+
+
+        // ===== EX Stage =====
+        if (id_ex.valid) {
+            //cout<<"[EX STAGE] "<<id_ex.instr.asmStr<<endl;
+            int idx = id_ex.pc / 4;
+            execTable[idx][cycle-1] = 'X';
+            instrNames[idx] = id_ex.instr.asmStr;
+            
+            
+            // 3) Forwarding
+            ForwardingControl fc = { NO_FORWARD, NO_FORWARD };
+            if (knobs.forwarding) {
+                fc = getForwardingControls(id_ex, ex_mem, mem_wb);
+            }
+
+            auto getOp = [&](uint32_t origVal, ForwardingSource fs){
+                if (fs == FORWARD_FROM_EX_MEM) return ex_mem.aluResult;
+                if (fs == FORWARD_FROM_MEM_WB) {
+                    return mem_wb.memRead ? mem_wb.memData : mem_wb.aluResult;
+                }
+                return origVal;
+            };
+
+            uint32_t op1 = getOp(
+                id_ex.readData1, fc.forwardA
+            );
+
+            uint32_t op2 = id_ex.aluSrc
+                ? static_cast<uint32_t>(id_ex.imm)
+                : id_ex.readData2;
+
+            if (!id_ex.aluSrc) {
+                op2 = getOp(id_ex.readData2, fc.forwardB);
+            }
+            // 1) Branch evaluation
+            bool taken = false;
+            bool exForwardedEq = op1==op2;
+            bool exForwardedNEq = op1!=op2;
+            exForwardedOp1 = op1;
+            exForwardedOp2 = op2;
+            uint32_t targetPC = 0;
+
+            if (id_ex.branch) {
+                taken = evaluateBranch(
+                    op1,
+                    op2,
+                    (id_ex.instr.binary >> 12) & 0x7
+                );
+                targetPC = id_ex.pc + id_ex.imm;
+            }
+
+            // 2) On a mispredict, we'll need to flush IF/ID & ID/EX
+        bool predTaken = bp.predict(id_ex.pc);
+        if (id_ex.branch && (predTaken != taken)) {
+            ++numMispredicts;
+            // immediately update the PHT with the real outcome
+            bp.update(id_ex.pc, taken, targetPC);
+            // redirect fetch
+            nextPC = taken ? targetPC : (id_ex.pc + 4);
+            // flush the in‐flight decode stages
+            next_if.valid = false;
+            next_id.valid = false;
+            ++numControlHazards;
+            if (!knobs.pipeline) ++numStallsControl;
+            haltFetchThisCycle = true;
+            // **do not** re-issue this branch into EX/MEM:
+            next_ex.valid = false;
+        } else {
+            haltFetchThisCycle = false;
+            // 3) Normal EX: ALU + forward into EX/MEM
+            uint32_t aluOut = executeALU(
+                op1, op2,
+                id_ex.opcode,
+                (id_ex.instr.binary >> 12) & 0x7,
+                (id_ex.instr.binary >> 25) & 0x7F
+            );
+            next_ex.valid        = true;
+            next_ex.pc           = id_ex.pc;
+            next_ex.instr        = id_ex.instr;
+            next_ex.aluResult    = aluOut;
+            next_ex.writeData    = op2;
+            next_ex.rd           = id_ex.rd;
+            next_ex.regWrite     = id_ex.regWrite;
+            next_ex.memRead      = id_ex.memRead;
+            next_ex.memWrite     = id_ex.memWrite;
+            next_ex.branch       = id_ex.branch;
+            next_ex.imm          = id_ex.imm;
+            next_ex.branchTarget = targetPC;
+        }
+        } else {
+            next_ex.valid = false;
+        }
+
+        // ===== ID Stage =====
+        if (!haltFetchThisCycle && if_id.valid) {
+            //cout<<"[ID STAGE] "<<if_id.instr.asmStr<<endl;
+            // 1) Decode control
+            int idx = if_id.pc / 4;
+            execTable[idx][cycle-1] = 'D';
+            instrNames[idx] = if_id.instr.asmStr;
+            uint32_t inst = if_id.instr.binary;
+            uint8_t opcode = inst & 0x7F;
+            
+
+            ControlSignals ctrl = generateControlSignals(opcode);
+
+            // 2) Extract fields
+            ID_EX candidate{};
+            
+            int32_t imm = 0;
+            switch (opcode) {
+                case 0x33: // R‑type (funct3 in its 12..14)
+                    candidate.valid      = true;
+                    candidate.pc         = if_id.pc;
+                    candidate.instr      = if_id.instr;
+                    candidate.opcode     = opcode;
+                    candidate.rs1        = (inst >> 15) & 0x1F;
+                    candidate.rs2        = (inst >> 20) & 0x1F;
+                    candidate.rd         = (inst >> 7)  & 0x1F;
                     break;
-                }
-                else if(c == ',') {
-                    tokens.push_back(temp);
-                    temp = "";
-                }
-                else {
-                    temp += c;
-                }
+                case 0x03: // I‑type (funct3 in its 12..14)
+                    candidate.valid      = true;
+                    candidate.pc         = if_id.pc;
+                    candidate.instr      = if_id.instr;
+                    candidate.opcode     = opcode;
+                    candidate.rs1        = (inst >> 15) & 0x1F;
+                    candidate.rd         = (inst >> 7)  & 0x1F;
+                    imm = static_cast<int32_t>(inst) >> 20; break;
+                case 0x67: // JALR (funct3 in its 12..14)
+                    candidate.valid      = true;
+                    candidate.pc         = if_id.pc;
+                    candidate.instr      = if_id.instr;
+                    candidate.opcode     = opcode;
+                    candidate.rs1        = (inst >> 15) & 0x1F;
+                    candidate.rd         = (inst >> 7)  & 0x1F;
+                    imm = static_cast<int32_t>(inst) >> 20; break;
+              case 0x13:
+                    candidate.valid      = true;
+                    candidate.pc         = if_id.pc;
+                    candidate.instr      = if_id.instr;
+                    candidate.opcode     = opcode;
+                    candidate.rs1        = (inst >> 15) & 0x1F;
+                    //candidate.rs2        = (inst >> 20) & 0x1F;
+                    candidate.rd         = (inst >> 7)  & 0x1F;
+                    imm = static_cast<int32_t>(inst) >> 20; break;
+              case 0x23:
+              candidate.valid      = true;
+            candidate.pc         = if_id.pc;
+            candidate.instr      = if_id.instr;
+            candidate.opcode     = opcode;
+            candidate.rs1        = (inst >> 15) & 0x1F;
+            candidate.rs2        = (inst >> 20) & 0x1F;
+            //candidate.rd         = (inst >> 7)  & 0x1F;
+                imm = ((inst >> 25) << 5) | ((inst >> 7) & 0x1F);
+                if (imm & 0x800) imm |= 0xFFFFF000;
+                break;
+              case 0x63:
+              candidate.valid      = true;
+              candidate.pc         = if_id.pc;
+              candidate.instr      = if_id.instr;
+              candidate.opcode     = opcode;
+              candidate.rs1        = (inst >> 15) & 0x1F;
+              candidate.rs2        = (inst >> 20) & 0x1F;
+              //candidate.rd         = (inst >> 7)  & 0x1F;
+                imm = ((inst >> 31) << 12)
+                    | (((inst >> 7) & 0x1) << 11)
+                    | (((inst >> 25) & 0x3F) << 5)
+                    | (((inst >> 8)  & 0xF) << 1);
+                if (imm & 0x1000) imm |= 0xFFFFE000;
+                break;
+              case 0x37:
+              candidate.valid      = true;
+              candidate.pc         = if_id.pc;
+              candidate.instr      = if_id.instr;
+              candidate.opcode     = opcode;
+              //candidate.rs1        = (inst >> 15) & 0x1F;
+              //candidate.rs2        = (inst >> 20) & 0x1F;
+              candidate.rd         = (inst >> 7)  & 0x1F;
+                imm = inst & 0xFFFFF000;
+                break;
+              case 0x17:
+              candidate.valid      = true;
+            candidate.pc         = if_id.pc;
+            candidate.instr      = if_id.instr;
+            candidate.opcode     = opcode;
+            //candidate.rs1        = (inst >> 15) & 0x1F;
+            //candidate.rs2        = (inst >> 20) & 0x1F;
+            candidate.rd         = (inst >> 7)  & 0x1F;
+                imm = inst & 0xFFFFF000;
+                break;
+                case 0x6f:
+                candidate.valid      = true;
+            candidate.pc         = if_id.pc;
+            candidate.instr      = if_id.instr;
+            candidate.opcode     = opcode;
+            //candidate.rs1        = (inst >> 15) & 0x1F;
+            //candidate.rs2        = (inst >> 20) & 0x1F;
+            candidate.rd         = (inst >> 7)  & 0x1F;
+                imm = ((inst >> 12) & 0xFF) << 12
+                    | ((inst >> 20) & 0x1) << 11
+                    | ((inst >> 21) & 0x3FF) << 1;
+                if (imm & 0x80000000) imm |= 0xFFF00000;
+                break;
+                default:
+                    candidate.valid = false;
             }
-            if(!temp.empty() && !comment) {
-                tokens.push_back(temp);
-            }
-            temp = "";
-            if(comment) break;
-        }
-        comment = 0;
-        if(tokens.empty()) continue;
+            candidate.imm = imm;         
+            candidate.regWrite = ctrl.regWrite;
+            candidate.memRead  = ctrl.memRead;
+            candidate.memWrite = ctrl.memWrite;
+            candidate.branch   = ctrl.branch;
+            candidate.aluSrc   = ctrl.aluSrc;
 
-        if(tokens[0] == ".text") {
-            flag = 0;
-            continue;
-        } else if(tokens[0] == ".data") {
-            flag = 1;
-            continue;
-        }
+            // 3) Read register file
+            candidate.readData1 = regs.read(candidate.rs1);
+            candidate.readData2 = regs.read(candidate.rs2);
 
-        if(!flag) {
-            ostringstream instrStr;
-            for(int i=0; i<(int)tokens.size(); i++) {
-                if(tokens[i][0] != 'x'){
-                    if(register_map.find(tokens[i]) != register_map.end()){
-                        tokens[i] = register_map[tokens[i]];
-                    }
-                } 
-            }
-            instrStr << tokens[0];    
-            for(int i = 1; i < (int)tokens.size(); i++) {
-                if(i == 1)
-                    instrStr << " " << tokens[i];
-                else
-                    instrStr << "," << tokens[i];
-            }
-            string originalInstr = instrStr.str();
 
-            if(type_map.find(tokens[0]) != type_map.end()) {
-                char type = type_map[tokens[0]];
-                string mc, bits;
-                switch(type) {
-                    case 'r': {
-                        mc   = Rformat(tokens);
-                        bits = RbitString(tokens);
-                        dataOutputFile << "0x" << std::hex << pc << " " 
-                                       << mc << " , " << originalInstr 
-                                       << " # " << bits << "\n";
-                        pc += 4;
-                        break;
-                    }
-                    case 'i': {
-                        if(tokens[0][0]=='l'){
-                            if(tokens.size()>3){
-                                string mer="";
-                                mer+=tokens[2];
-                                mer+='(';
-                                mer+=tokens[3];
-                                mer+=')';
-                                tokens[2]=mer;
-                                while(tokens.size()>3) tokens.pop_back();
-                            }
-                            if(tokens.size()>=3 && varmap.find(tokens[2]) != varmap.end()) {
-                                int num = myData >> 12;
-                                vector<string> tempInstr = {"auipc", tokens[1], to_string(num)};
-                                string mc2   = Uformat(tempInstr);
-                                string bits2 = UbitString(tempInstr);
-                                dataOutputFile << "0x" << std::hex << pc << " "
-                                               << mc2 << " , " 
-                                               << ("auipc " + tokens[1] + "," + to_string(num))
-                                               << " # " << bits2 << "\n";
-                                pc += 4;
-                                num <<= 12;
-                                int offset = (varmap[tokens[2]] - num - pc);
-                                tokens[2] = to_string(offset) + "(" + tokens[1] + ")";
-                            }
-                        }
-                        mc   = Iformat(tokens);
-                        bits = IbitString(tokens);
-                        dataOutputFile << "0x" << std::hex << pc << " "
-                                       << mc << " , " << originalInstr
-                                       << " # " << bits << "\n";
-                        pc += 4;
-                        break;
-                    }
-                    case 's': {
-                        if(tokens.size()>3){
-                            string mer="";
-                            mer+=tokens[2];
-                            mer+='(';
-                            mer+=tokens[3];
-                            mer+=')';
-                            tokens[2]=mer;
-                            while(tokens.size()>3) tokens.pop_back();
-                        }
-                        mc   = Sformat(tokens);
-                        bits = SbitString(tokens);
-                        dataOutputFile << "0x" << std::hex << pc << " "
-                                       << mc << " , " << originalInstr
-                                       << " # " << bits << "\n";
-                        pc += 4;
-                        break;
-                    }
-                    case 'b': {
-                        if(tokens.size()>=4 && label.find(tokens[3]) != label.end()) {
-                            tokens[3] = to_string(label[tokens[3]] - pc);
-                        }
-                        mc   = SBformat(tokens);
-                        bits = SBbitString(tokens);
-                        dataOutputFile << "0x" << std::hex << pc << " "
-                                       << mc << " , " << originalInstr
-                                       << " # " << bits << "\n";
-                        pc += 4;
-                        break;
-                    }
-                    case 'u': {
-                        mc   = Uformat(tokens);
-                        bits = UbitString(tokens);
-                        dataOutputFile << "0x" << std::hex << pc << " "
-                                       << mc << " , " << originalInstr
-                                       << " # " << bits << "\n";
-                        pc += 4;
-                        break;
-                    }
-                    case 'j': {
-                        if(tokens.size()>=3 && label.find(tokens[2]) != label.end()) {
-                            tokens[2] = to_string(label[tokens[2]] - pc);
-                        }
-                        mc   = UJformat(tokens);
-                        bits = UJbitString(tokens);
-                        dataOutputFile << "0x" << std::hex << pc << " "
-                                       << mc << " , " << originalInstr
-                                       << " # " << bits << "\n";
-                        pc += 4;
-                        break;
-                    }
-                    default:
-                        dataOutputFile << "Error" << "\n";
-                }
-            }
-            else {
-                int sz = tokens[0].size();
-                if(tokens[0][sz-1] == ':') {
-                    tokens[0].pop_back();
-                    if(label.find(tokens[0]) == label.end()) {
-                        dataOutputFile << "Command not found" << endl;
-                        break;
-                    }
-                }
-            }
-        }
+        bool stall = shouldStallIDStage(candidate, next_ex, next_mem, knobs.forwarding);
+            if (stall) {
+            // inject a single-cycle bubble:
+            doStall       = true;
+            next_id.valid = false;    // bubble in ID→EX
+            next_if       = if_id;    // freeze IF/ID
+        nextPC        = PC;       // do not advance PC
+        ++numDataHazards;
+        ++numStalls;
+        ++numStallsData;
+    } else {
+        // no stall ⇒ push candidate forward
+        next_id       = candidate;
+        totalInsts++;
     }
 
-    // Finally, print data segment
-    dataOutputFile << "\nData Segment\n";
-    for (auto &it : dataSegment) {
-        dataOutputFile << "0x" << std::hex << it.first 
-                       << " 0x" << std::hex << it.second << "\n";
-    }
+        } else {
+            next_id.valid = false;
+        }
 
-    inputFile.close();
-    dataOutputFile.close();
+        // ===== IF Stage =====
+        if (!doStall && !haltFetchThisCycle && PC < lastAddr) {
+            //cout<<"[IF STAGE] "<<if_id.instr.asmStr<<endl;
+            int idx = PC / 4;
+            execTable[idx][cycle-1] = 'F';
+            instrNames[idx] =  imem.fetch(PC).asmStr;
+            // 1) Branch predictor gives us a PC
+            bool take = bp.predict(PC);
+            uint32_t targ   = bp.getTarget(PC);
+            Instruction fetched = imem.fetch(PC);
+            next_if.valid = true;
+            next_if.pc    = PC;
+            next_if.instr = fetched;
+
+            PC += 4;
+            nextPC = take ? targ : PC;
+            if (take) ++numControlHazards;
+
+        } else if (!doStall) {
+            next_if.valid = false;
+        }
+
+        // ===== Commit updates =====
+        if_id   = next_if;
+        id_ex   = next_id;
+        ex_mem  = next_ex;
+        mem_wb  = next_mem;
+        PC      = nextPC;
+
+        // if(ex_mem.valid && ex_mem.branch){
+        //     bool actual = ((ex_mem.instr.binary >> 12)& 0x7) == 0 ? exForwardedEq : ((ex_mem.instr.binary >> 12)& 0x7) == 1 ? exForwardedNEq 
+        //     : evaluateBranch(exForwardedOp1, exForwardedOp2, (ex_mem.instr.binary >> 12) & 0x7);
+        //     bp.update(ex_mem.pc, actual,  ex_mem.branchTarget);
+        // }
+        // ===== Tracing =====
+        if (knobs.traceRegs) {
+            regs.dump();
+        }
+        if (knobs.tracePipe) {
+            cout << "[Cycle " << cycle << "]\n"
+                      << " IF/ID: " << (if_id.valid ? if_id.instr.asmStr : "----") << "\n"
+                      << " ID/EX: " << (id_ex.valid ? id_ex.instr.asmStr : "----") << "\n"
+                      << " EX/MEM: " << (ex_mem.valid ? ex_mem.instr.asmStr : "----") << "\n"
+                      << " MEM/WB: " << (mem_wb.valid ? mem_wb.instr.asmStr : "----") << "\n";
+        }
+        if (knobs.traceInst && if_id.valid && (int)(if_id.pc/4) == knobs.traceInstIdx) {
+            cout << "[Trace Inst " << knobs.traceInstIdx << "] in IF/ID at cycle " << cycle << "\n";
+        }else if (knobs.traceInst && id_ex.valid && (int)(id_ex.pc/4) == knobs.traceInstIdx) {
+            cout << "[Trace Inst " << knobs.traceInstIdx << "] in ID/EX at cycle " << cycle << "\n";
+        }else if (knobs.traceInst && ex_mem.valid && (int)(ex_mem.pc/4) == knobs.traceInstIdx) {
+            cout << "[Trace Inst " << knobs.traceInstIdx << "] in EX/MEM at cycle " << cycle << "\n";
+        }else if (knobs.traceInst && mem_wb.valid && (int)(mem_wb.pc/4) == knobs.traceInstIdx) {
+            cout << "[Trace Inst " << knobs.traceInstIdx << "] in MEM/WB at cycle " << cycle << "\n";
+        }
+        if (knobs.traceBP) {
+            bp.printState();
+        }
+    } // end while
+
+    // 8) Stats → pipeline_sim.txt
+    ofstream outf("pipeline_sim.txt");
+    outf << "Total cycles: "      << cycle << "\n"
+         << "Total instructions: "<< totalInsts << "\n"
+         << "CPI: "               << fixed << setprecision(2)
+                                 << double(cycle)/totalInsts << "\n"
+         << "Data-transfer: "     << numLoads << "\n"
+         << "ALU instructions: "  << numALU << "\n"
+         << "Control instructions:" << numControl << "\n"
+         << "Stalls/bubbles: "    << numStalls << "\n"
+         << "Data hazards: "      << numDataHazards << "\n"
+         << "Control hazards: "   << numControlHazards << "\n"
+         << "Branch mispredictions: " << numMispredicts << "\n"
+         << "Stalls due to data hazards: "    << numStallsData << "\n"
+         << "Stalls due to control hazards: " << numStallsControl << "\n";
+    outf.close();
+
+    printExecutionTable(instrNames, execTable, cycle);
+
     return 0;
 }
+
+
